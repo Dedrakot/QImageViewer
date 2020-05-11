@@ -12,7 +12,6 @@
 
 class IteratorState {
 public:
-
     IteratorState():sortBy(QDir::Name) {
     }
 
@@ -61,12 +60,16 @@ public:
     inline void setSortBy(QDir::SortFlags sortBy) {
         this->sortBy = sortBy;
     }
+
+    void remove();
+
+    QString filePath() const;
+
+    QFileInfo current() const;
 private:
     QFileInfoList files;
     QDir::SortFlags sortBy;
     int uk = 0;
-
-    QFileInfo current();
 };
 
 

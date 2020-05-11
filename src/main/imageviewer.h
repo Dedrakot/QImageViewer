@@ -34,7 +34,7 @@ Q_OBJECT
 public:
     explicit ImageViewer(QWidget *parent = nullptr);
 
-    bool loadFile(const QFileInfo &);
+    bool loadFile(const QFileInfo &, bool showWarn = true);
 
 public slots:
 
@@ -45,6 +45,8 @@ private slots:
     void open();
 
     void saveAs();
+
+    void deleteFile();
 
     void print();
 

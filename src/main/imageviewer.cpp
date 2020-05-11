@@ -51,16 +51,18 @@ ImageViewer::ImageViewer(QWidget *parent) : QMainWindow(parent), imageLabel(new 
     restoreSettings();
 }
 
-bool ImageViewer::loadFile(const QFileInfo &file) {
+bool ImageViewer::loadFile(const QFileInfo &file, bool showWarn) {
     iterator.setFile(file);
     QString filePath = file.filePath();
     QImageReader reader(filePath);
     reader.setAutoTransform(true);
     const QImage newImage = reader.read();
     if (newImage.isNull()) {
-        QMessageBox::information(this, QGuiApplication::applicationDisplayName(),
-                                 tr("Cannot load %1: %2")
-                                         .arg(QDir::toNativeSeparators(filePath), reader.errorString()));
+        if (showWarn) {
+            QMessageBox::information(this, QGuiApplication::applicationDisplayName(),
+                                     tr("Cannot load %1: %2")
+                                             .arg(QDir::toNativeSeparators(filePath), reader.errorString()));
+        }
         return false;
     }
 
@@ -148,6 +150,17 @@ void ImageViewer::saveAs() {
     initializeImageFileDialog(dialog, QFileDialog::AcceptSave);
 
     while (dialog.exec() == QDialog::Accepted && !saveFile(dialog.selectedFiles().first())) {}
+}
+
+void ImageViewer::deleteFile() {
+    QFile file(iterator.getCurrentFile());
+
+    if (QMessageBox::Yes == QMessageBox::question(this, tr("Remove file"),
+                                                  QString(tr("Do you want to remove \"%1\"")).arg(file.fileName()))) {
+        file.remove();
+        iterator.removeCurrent();
+        loadFile(iterator.getCurrentFile(), false);
+    }
 }
 
 void ImageViewer::print() {
@@ -269,6 +282,9 @@ void ImageViewer::createActions() {
     printAct = fileMenu->addAction(tr("&Print..."), this, &ImageViewer::print);
     printAct->setShortcut(QKeySequence::Print);
     printAct->setEnabled(false);
+
+    auto deleteAct = fileMenu->addAction(tr("&Delete"), this, &ImageViewer::deleteFile);
+    deleteAct->setShortcut(QKeySequence::Delete);
 
     fileMenu->addSeparator();
 
@@ -405,11 +421,12 @@ void ImageViewer::resizeEvent(QResizeEvent *event) {
 
 void ImageViewer::loadNext() {
     if (iterator.canIterate()) {
-        QFileInfo f(iterator.next());
+        QFileInfo f(iterator.next().filePath());
         if (!f.isReadable()) {
             QFileInfo current(windowFilePath());
             do {
-                f = iterator.next();
+                iterator.removeCurrent();
+                f = iterator.next().filePath();
                 if (f == current) {
                     return;
                 }

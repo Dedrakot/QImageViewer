@@ -71,7 +71,7 @@ void IteratorState::locate(const QFileInfo &file) {
                 if (cmp(file, f)) {
                     r = mid;
                 } else {
-                    if(f == file) {
+                    if (f == file) {
                         r = mid;
                         break;
                     }
@@ -111,8 +111,21 @@ void IteratorState::sort() {
     locate(f);
 }
 
-QFileInfo IteratorState::current() {
+QFileInfo IteratorState::current() const {
     return uk < files.size() ? files.at(uk) : QFileInfo();
+}
+
+void IteratorState::remove() {
+    if (uk < files.size()) {
+        files.removeAt(uk--);
+        if (uk < 0) {
+            uk = 0;
+        }
+    }
+}
+
+QString IteratorState::filePath() const {
+    return uk < files.size() ? files.at(uk).filePath() : QString();
 }
 
 

@@ -24,10 +24,20 @@ public:
 
     QFileInfo previous();
 
+    QFileInfo current() const;
+
     int directorySize() const;
 
     inline QDir::SortFlags getSortFlags() const {
         return state.getSortBy();
+    }
+
+    inline void removeCurrent() {
+        state.remove();
+    }
+
+    inline QString getCurrentFile() const {
+        return state.filePath();
     }
 
 private:
