@@ -544,7 +544,8 @@ void ImageViewer::saveScale() {
 }
 
 void ImageViewer::savePath() {
-    settings.setValue(SETTINGS_PATH, iterator.current().dir().path());
+    QFileInfo filePath(windowFilePath());
+    settings.setValue(SETTINGS_PATH, (filePath.isDir() ? QDir(filePath.path()): filePath.dir()).absolutePath());
 }
 
 void ImageViewer::dropGeometry() {
