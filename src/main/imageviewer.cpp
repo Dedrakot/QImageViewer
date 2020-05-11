@@ -297,11 +297,8 @@ void ImageViewer::createActions() {
     sortReversedAct->setCheckable(true);
     viewMenu->addSeparator();
 
-#ifndef Q_OS_MAC
-    fullScreenAct = viewMenu->addAction(tr("Fullscreen mode"), this, &ImageViewer::fullScreenMode);
-    fullScreenAct->setCheckable(true);
+    QAction *fullScreenAct = viewMenu->addAction(tr("Fullscreen mode"), this, &ImageViewer::fullScreenMode);
     fullScreenAct->setShortcut(QKeySequence::FullScreen);
-#endif
 
     zoomInAct = viewMenu->addAction(tr("Zoom &In (25%)"), this, &ImageViewer::zoomIn);
     zoomInAct->setShortcut(tr("Ctrl+="));//QKeySequence::ZoomIn);
@@ -324,20 +321,13 @@ void ImageViewer::createActions() {
     helpMenu->addAction(tr("About &Qt"), &QApplication::aboutQt);
 }
 
-#ifndef Q_OS_MAC
-
 void ImageViewer::fullScreenMode() {
-    if (fullScreenAct->isChecked()) {
-        if (!isFullScreen()) {
-            showFullScreen();
-        }
-    } else if (isFullScreen()) {
+    if (isFullScreen()) {
         showNormal();
+    } else if (isFullScreen()) {
+        showFullScreen();
     }
-
 }
-
-#endif
 
 void ImageViewer::sortByName() {
     iterator.setSort(sortOrder().setFlag(QDir::Name));

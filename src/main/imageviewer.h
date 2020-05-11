@@ -113,13 +113,7 @@ private:
 
     void scalePixmap(double factor);
 
-#ifndef Q_OS_MAC
-
     void fullScreenMode();
-
-    QAction *fullScreenAct{};
-
-#endif
 };
 
 #endif
