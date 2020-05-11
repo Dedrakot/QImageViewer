@@ -74,7 +74,7 @@ private slots:
 
     void saveScale();
 
-//    void savePath();
+    void savePath();
 
     void dropGeometry();
 
@@ -82,7 +82,7 @@ private slots:
 
     void dropScale();
 
-//    void dropPath();
+    void dropPath();
 
 private:
     void restoreScale();
@@ -91,7 +91,7 @@ private:
 
     void restoreSort();
 
-//    void restorePath();
+    void restorePath();
 protected:
     void keyPressEvent(QKeyEvent *event) override;
 

@@ -32,7 +32,7 @@
 const QString SETTINGS_SORT = "view/sort";
 const QString SETTINGS_GEOMETRY = "view/geometry";
 const QString SETTINGS_SCALE = "view/scale";
-//const QString SETTINGS_PATH = "view/path";
+const QString SETTINGS_PATH = "view/path";
 
 ImageViewer::ImageViewer(QWidget *parent) : QMainWindow(parent), imageLabel(new QLabel), scrollArea(new QScrollArea),
                                             settings("Dedrakot", "ImageViewer") {
@@ -117,13 +117,21 @@ bool ImageViewer::saveFile(const QString &fileName) {
     return true;
 }
 
-static void initializeImageFileDialog(QFileDialog &dialog, QFileDialog::AcceptMode acceptMode) {
-    static bool firstDialog = true;
+QString currentPath(const QString &current) {
+    if (!current.isEmpty() && QDir(current).exists()) {
+        return current;
+    }
+    const QStringList picturesLocations = QStandardPaths::standardLocations(QStandardPaths::PicturesLocation);
+    return picturesLocations.isEmpty() ? QDir::currentPath() : picturesLocations.last();
+}
 
+static bool firstDialog = true;
+
+static void
+initializeImageFileDialog(QFileDialog &dialog, QFileDialog::AcceptMode acceptMode, const QSettings &settings) {
     if (firstDialog) {
         firstDialog = false;
-        const QStringList picturesLocations = QStandardPaths::standardLocations(QStandardPaths::PicturesLocation);
-        dialog.setDirectory(picturesLocations.isEmpty() ? QDir::currentPath() : picturesLocations.last());
+        dialog.setDirectory(currentPath(settings.value(SETTINGS_PATH, QString()).value<QString>()));
     }
 
     QStringList mimeTypeFilters;
@@ -140,14 +148,14 @@ static void initializeImageFileDialog(QFileDialog &dialog, QFileDialog::AcceptMo
 
 void ImageViewer::open() {
     QFileDialog dialog(this, tr("Open File"));
-    initializeImageFileDialog(dialog, QFileDialog::AcceptOpen);
+    initializeImageFileDialog(dialog, QFileDialog::AcceptOpen, settings);
 
     while (dialog.exec() == QDialog::Accepted && !loadFile(dialog.selectedFiles().first())) {}
 }
 
 void ImageViewer::saveAs() {
     QFileDialog dialog(this, tr("Save File As"));
-    initializeImageFileDialog(dialog, QFileDialog::AcceptSave);
+    initializeImageFileDialog(dialog, QFileDialog::AcceptSave, settings);
 
     while (dialog.exec() == QDialog::Accepted && !saveFile(dialog.selectedFiles().first())) {}
 }
@@ -343,12 +351,12 @@ void ImageViewer::createActions() {
     settingsMenu->addAction(tr("&Save Geometry"), this, &ImageViewer::saveGeometry);
     settingsMenu->addAction(tr("&Save Sort"), this, &ImageViewer::saveSort);
     settingsMenu->addAction(tr("&Save Scale"), this, &ImageViewer::saveScale);
-//    settings->addAction(tr("&Save Path"), this, &ImageViewer::savePath);
+    settingsMenu->addAction(tr("&Save Path"), this, &ImageViewer::savePath);
     settingsMenu->addAction(tr("&Drop Settings"), this, &ImageViewer::dropSettings);
     settingsMenu->addAction(tr("&Drop Geometry"), this, &ImageViewer::dropGeometry);
     settingsMenu->addAction(tr("&Drop Sort"), this, &ImageViewer::dropSort);
     settingsMenu->addAction(tr("&Drop Scale"), this, &ImageViewer::dropScale);
-//    settings->addAction(tr("&Drop Path"), this, &ImageViewer::dropPath);
+    settingsMenu->addAction(tr("&Drop Path"), this, &ImageViewer::dropPath);
 
     QMenu *helpMenu = menuBar()->addMenu(tr("&Help"));
 
@@ -449,7 +457,7 @@ void ImageViewer::loadPrevious() {
 }
 
 QDir::SortFlags ImageViewer::sortOrder() {
-    return sortReversedAct->isChecked()? QDir::Reversed : QDir::Name;
+    return sortReversedAct->isChecked() ? QDir::Reversed : QDir::Name;
 }
 
 void ImageViewer::scalePixmap(double factor) {
@@ -467,6 +475,7 @@ void ImageViewer::restoreSettings() {
     restoreScale();
     restoreSort();
     restoreGeometry();
+    restorePath();
 }
 
 void ImageViewer::restoreScale() {
@@ -507,16 +516,12 @@ void ImageViewer::restoreSort() {
     sortReversedAct->setChecked(sortFlags.testFlag(QDir::Reversed));
 }
 
-//void ImageViewer::restorePath() {
-//
-//}
+void ImageViewer::restorePath() {
+    firstDialog = true;
+}
 
 void ImageViewer::dropSettings() {
     settings.clear();
-//    dropSort();
-//    dropScale();
-//    dropGeometry();
-//    dropPath();
 }
 
 void ImageViewer::saveGeometry() {
@@ -538,9 +543,9 @@ void ImageViewer::saveScale() {
     settings.endGroup();
 }
 
-//void ImageViewer::savePath() {
-//
-//}
+void ImageViewer::savePath() {
+    settings.setValue(SETTINGS_PATH, iterator.current().dir().path());
+}
 
 void ImageViewer::dropGeometry() {
     settings.remove(SETTINGS_GEOMETRY);
@@ -554,6 +559,6 @@ void ImageViewer::dropScale() {
     settings.remove(SETTINGS_SCALE);
 }
 
-//void ImageViewer::dropPath() {
-//
-//}
+void ImageViewer::dropPath() {
+    settings.remove(SETTINGS_PATH);
+}

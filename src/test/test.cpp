@@ -10,6 +10,13 @@ private:
     }
 
 private slots:
+    void edu_FileInfoDir() {
+        QFileInfo f;
+        QDir d(f.dir());
+
+        QCOMPARE(d.path(), QString("."));
+    }
+
     void initTestCase()
     {
         qDebug("Called before everything else.");
