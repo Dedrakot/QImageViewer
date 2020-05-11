@@ -20,6 +20,8 @@ public:
 
     bool canIterate();
 
+    bool isEmpty() const;
+
     QFileInfo next();
 
     QFileInfo previous();

@@ -47,6 +47,10 @@ bool ImageIterator::canIterate() {
     return state.canIterate();
 }
 
+bool ImageIterator::isEmpty() const {
+    return state.getFiles().isEmpty();
+}
+
 QFileInfo ImageIterator::current() const {
     return state.current();
 }

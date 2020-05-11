@@ -419,41 +419,37 @@ void ImageViewer::resizeEvent(QResizeEvent *event) {
         fitToWindow();
 }
 
-void ImageViewer::loadNext() {
+QFileInfo iterate(ImageIterator &iterator, QFileInfo (ImageIterator::*next)()) {
     if (iterator.canIterate()) {
-        QFileInfo f(iterator.next().filePath());
+        QFileInfo f((&iterator->*next)().filePath());
         if (!f.isReadable()) {
-            QFileInfo current(windowFilePath());
+            QFileInfo current(f);
             do {
                 iterator.removeCurrent();
-                f = iterator.next().filePath();
-                if (f == current) {
-                    return;
-                }
-            } while (!f.isReadable());
+                f = (&iterator->*next)().filePath();
+            } while (!f.isReadable() && !iterator.isEmpty());
         }
+        return f;
+    }
+    return QFileInfo();
+}
+
+void ImageViewer::loadNext() {
+    QFileInfo f(iterate(iterator, &ImageIterator::next));
+    if (f.isReadable() && windowFilePath() != f.filePath()) {
         loadFile(f);
     }
 }
 
 void ImageViewer::loadPrevious() {
-    if (iterator.canIterate()) {
-        QFileInfo f(iterator.previous());
-        if (!f.isReadable()) {
-            QFileInfo current(windowFilePath());
-            do {
-                f = iterator.previous();
-                if (f == current) {
-                    return;
-                }
-            } while (!f.isReadable());
-        }
+    QFileInfo f(iterate(iterator, &ImageIterator::previous));
+    if (f.isReadable() && windowFilePath() != f.filePath()) {
         loadFile(f);
     }
 }
 
 QDir::SortFlags ImageViewer::sortOrder() {
-    return sortReversedAct->isChecked() ? QDir::Reversed : QDir::Name;
+    return sortReversedAct->isChecked()? QDir::Reversed : QDir::Name;
 }
 
 void ImageViewer::scalePixmap(double factor) {
