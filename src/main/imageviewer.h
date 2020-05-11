@@ -35,6 +35,8 @@ public:
 
     bool loadFile(const QFileInfo &);
 
+public slots:
+    void loadImage(const QString &filePath);
 private slots:
 
     void open();

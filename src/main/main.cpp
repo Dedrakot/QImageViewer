@@ -2,10 +2,11 @@
 #include <QCommandLineParser>
 
 #include "imageviewer.h"
+#include "OpenEventApp.h"
 
 int main(int argc, char *argv[])
 {
-    QApplication app(argc, argv);
+    OpenEventApp app(argc, argv);
     QGuiApplication::setApplicationDisplayName(ImageViewer::tr("Image Viewer"));
     QCommandLineParser commandLineParser;
     commandLineParser.addHelpOption();
@@ -16,6 +17,8 @@ int main(int argc, char *argv[])
         && !imageViewer.loadFile(commandLineParser.positionalArguments().front())) {
         return -1;
     }
+    QObject::connect(&app, &OpenEventApp::openRequest,
+            &imageViewer, &ImageViewer::loadImage);
     imageViewer.show();
     return app.exec();
 }

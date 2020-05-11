@@ -26,7 +26,8 @@ SOURCES += \
 HEADERS += \
     src/main/imageviewer.h \
     src/main/ImageIterator.h \
-    src/main/IteratorState.h
+    src/main/IteratorState.h \
+    src/main/OpenEventApp.h
 
 FORMS +=
 

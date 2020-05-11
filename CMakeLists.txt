@@ -19,7 +19,7 @@ enable_testing(true)
 add_executable(${PROJECT_NAME}
         src/main/imageviewer.cpp
         src/main/imageviewer.h
-        src/main/main.cpp src/main/ImageIterator.cpp src/main/ImageIterator.h src/main/IteratorState.h src/main/IteratorState.cpp)
+        src/main/main.cpp src/main/ImageIterator.cpp src/main/ImageIterator.h src/main/IteratorState.h src/main/IteratorState.cpp src/main/OpenEventApp.h)
 
 add_library(${PROJECT_NAME}_LIB
         SHARED

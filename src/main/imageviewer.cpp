@@ -304,7 +304,7 @@ void ImageViewer::createActions() {
 #endif
 
     zoomInAct = viewMenu->addAction(tr("Zoom &In (25%)"), this, &ImageViewer::zoomIn);
-    zoomInAct->setShortcut(QKeySequence::ZoomIn);
+    zoomInAct->setShortcut(tr("Ctrl+="));//QKeySequence::ZoomIn);
 
     zoomOutAct = viewMenu->addAction(tr("Zoom &Out (25%)"), this, &ImageViewer::zoomOut);
     zoomOutAct->setShortcut(QKeySequence::ZoomOut);
@@ -325,6 +325,7 @@ void ImageViewer::createActions() {
 }
 
 #ifndef Q_OS_MAC
+
 void ImageViewer::fullScreenMode() {
     if (fullScreenAct->isChecked()) {
         if (!isFullScreen()) {
@@ -335,6 +336,7 @@ void ImageViewer::fullScreenMode() {
     }
 
 }
+
 #endif
 
 void ImageViewer::sortByName() {
@@ -433,4 +435,8 @@ void ImageViewer::scalePixmap(double factor) {
 
     adjustScrollBar(scrollArea->horizontalScrollBar(), factor);
     adjustScrollBar(scrollArea->verticalScrollBar(), factor);
+}
+
+void ImageViewer::loadImage(const QString &filePath) {
+    loadFile(filePath);
 }
