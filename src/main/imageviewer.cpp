@@ -18,8 +18,6 @@
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QKeyEvent>
-#include <QDirIterator>
-#include <QMimeDatabase>
 #include <QDateTime>
 
 #if defined(QT_PRINTSUPPORT_LIB)
@@ -39,6 +37,7 @@ ImageViewer::ImageViewer(QWidget *parent)
     scrollArea->setBackgroundRole(QPalette::Dark);
     scrollArea->setWidget(imageLabel);
     scrollArea->setVisible(false);
+    scrollArea->setAlignment(Qt::AlignCenter);
     setCentralWidget(scrollArea);
 
     createActions();
@@ -75,15 +74,18 @@ void ImageViewer::setImage(const QImage &newImage) {
     if (image.colorSpace().isValid())
         image.convertToColorSpace(QColorSpace::SRgb);
     imageLabel->setPixmap(QPixmap::fromImage(image));
-    scaleFactor = 1.0;
 
     scrollArea->setVisible(true);
     printAct->setEnabled(true);
-    fitToWindowAct->setEnabled(true);
     updateActions();
 
-    if (!fitToWindowAct->isChecked())
+    if (fitToWindowAct->isChecked()) {
+        fitToWindow();
+    } else if (scaleFactor != 1.0) {
+        scalePixmap(scaleFactor);
+    } else {
         imageLabel->adjustSize();
+    }
 }
 
 bool ImageViewer::saveFile(const QString &fileName) {
@@ -197,15 +199,27 @@ void ImageViewer::zoomOut() {
 }
 
 void ImageViewer::normalSize() {
-    imageLabel->adjustSize();
     scaleFactor = 1.0;
+    if (fitToWindowAct->isChecked()) {
+        fitToWindow();
+    } else {
+        imageLabel->adjustSize();
+    }
 }
 
 void ImageViewer::fitToWindow() {
-    bool fitToWindow = fitToWindowAct->isChecked();
-    scrollArea->setWidgetResizable(fitToWindow);
-    if (!fitToWindow)
-        normalSize();
+    if (!image.isNull()) {
+        bool fitToWindow = fitToWindowAct->isChecked();
+        if (fitToWindow) {
+            QSize size = image.size();
+            const int delta = 2;
+            double newScaleFactor = std::min((double) (scrollArea->width() - delta) / size.width(),
+                                             (double) (scrollArea->height() - delta) / size.height());
+            scalePixmap(std::min(scaleFactor, newScaleFactor));
+        } else {
+            scalePixmap(scaleFactor);
+        }
+    }
     updateActions();
 }
 
@@ -272,22 +286,22 @@ void ImageViewer::createActions() {
     sortReversedAct->setCheckable(true);
     viewMenu->addSeparator();
 
+    fullScreenAct = viewMenu->addAction(tr("Fullscreen mode"), this, &ImageViewer::fullScreenMode);
+    fullScreenAct->setCheckable(true);
+    fullScreenAct->setShortcut(QKeySequence::FullScreen);
+
     zoomInAct = viewMenu->addAction(tr("Zoom &In (25%)"), this, &ImageViewer::zoomIn);
-    zoomInAct->setShortcut(QKeySequence::ZoomIn);
-    zoomInAct->setEnabled(false);
+    zoomInAct->setShortcut(tr("Ctrl+="));//QKeySequence::ZoomIn);
 
     zoomOutAct = viewMenu->addAction(tr("Zoom &Out (25%)"), this, &ImageViewer::zoomOut);
     zoomOutAct->setShortcut(QKeySequence::ZoomOut);
-    zoomOutAct->setEnabled(false);
 
     normalSizeAct = viewMenu->addAction(tr("&Normal Size"), this, &ImageViewer::normalSize);
-    normalSizeAct->setShortcut(tr("Ctrl+S"));
-    normalSizeAct->setEnabled(false);
+    normalSizeAct->setShortcut(tr("Ctrl+0"));
 
     viewMenu->addSeparator();
 
     fitToWindowAct = viewMenu->addAction(tr("&Fit to Window"), this, &ImageViewer::fitToWindow);
-    fitToWindowAct->setEnabled(false);
     fitToWindowAct->setCheckable(true);
     fitToWindowAct->setShortcut(tr("Ctrl+F"));
 
@@ -295,6 +309,17 @@ void ImageViewer::createActions() {
 
     helpMenu->addAction(tr("&About"), this, &ImageViewer::about);
     helpMenu->addAction(tr("About &Qt"), &QApplication::aboutQt);
+}
+
+void ImageViewer::fullScreenMode() {
+    if (fullScreenAct->isChecked()) {
+        if (!isFullScreen()) {
+            showFullScreen();
+        }
+    } else if (isFullScreen()) {
+        showNormal();
+    }
+
 }
 
 void ImageViewer::sortByName() {
@@ -315,28 +340,25 @@ void ImageViewer::reverseSort() {
 void ImageViewer::updateActions() {
     saveAsAct->setEnabled(!image.isNull());
     copyAct->setEnabled(!image.isNull());
-    zoomInAct->setEnabled(!fitToWindowAct->isChecked());
-    zoomOutAct->setEnabled(!fitToWindowAct->isChecked());
-    normalSizeAct->setEnabled(!fitToWindowAct->isChecked());
 }
 
 static void adjustScrollBar(QScrollBar *scrollBar, double factor);
 
 void ImageViewer::scaleImage(double factor) {
-    Q_ASSERT(imageLabel->pixmap());
-    scaleFactor *= factor;
-    imageLabel->resize(scaleFactor * imageLabel->pixmap()->size());
-
-    adjustScrollBar(scrollArea->horizontalScrollBar(), factor);
-    adjustScrollBar(scrollArea->verticalScrollBar(), factor);
-
-    zoomInAct->setEnabled(scaleFactor < 3.0);
-    zoomOutAct->setEnabled(scaleFactor > 0.333);
+    if (!image.isNull()) {
+        scaleFactor *= factor;
+        if (fitToWindowAct->isChecked()) {
+            fitToWindow();
+        } else {
+            scalePixmap(scaleFactor);
+        }
+    }
 }
 
 void adjustScrollBar(QScrollBar *scrollBar, double factor) {
-    scrollBar->setValue(int(factor * scrollBar->value()
-                            + ((factor - 1) * scrollBar->pageStep() / 2)));
+    int val = int(factor * scrollBar->value()
+                  + ((factor - 1) * scrollBar->pageStep() / 2));
+    scrollBar->setValue(val);
 }
 
 void ImageViewer::keyPressEvent(QKeyEvent *event) {
@@ -350,6 +372,11 @@ void ImageViewer::keyPressEvent(QKeyEvent *event) {
     }
 }
 
+void ImageViewer::resizeEvent(QResizeEvent *event) {
+    if (fitToWindowAct->isChecked())
+        fitToWindow();
+}
+
 void ImageViewer::loadNext() {
     if (iterator.canIterate()) {
         QFileInfo f(iterator.next());
@@ -357,11 +384,10 @@ void ImageViewer::loadNext() {
             QFileInfo current(windowFilePath());
             do {
                 f = iterator.next();
-                if(f==current) {
+                if (f == current) {
                     return;
                 }
-            }
-            while (!f.isReadable());
+            } while (!f.isReadable());
         }
         loadFile(f);
     }
@@ -374,11 +400,10 @@ void ImageViewer::loadPrevious() {
             QFileInfo current(windowFilePath());
             do {
                 f = iterator.previous();
-                if(f==current) {
+                if (f == current) {
                     return;
                 }
-            }
-            while (!f.isReadable());
+            } while (!f.isReadable());
         }
         loadFile(f);
     }
@@ -386,4 +411,14 @@ void ImageViewer::loadPrevious() {
 
 QDir::SortFlags ImageViewer::sortOrder() {
     return sortReversedAct->isChecked() ? QDir::Reversed : QDir::Name;
+}
+
+void ImageViewer::scalePixmap(double factor) {
+    imageLabel->resize(factor * imageLabel->pixmap()->size());
+
+    adjustScrollBar(scrollArea->horizontalScrollBar(), factor);
+    adjustScrollBar(scrollArea->verticalScrollBar(), factor);
+
+    zoomInAct->setEnabled(factor < 3.0);
+    zoomOutAct->setEnabled(factor > 0.333);
 }

@@ -44,8 +44,7 @@ private slots:
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
-//    void keyReleaseEvent(QKeyEvent *event) override;
-
+    void resizeEvent(QResizeEvent *event) override;
 private:
     bool isValid(const QString &typeName) const;
     void loadNext();
@@ -58,6 +57,7 @@ private:
     void sortByName();
     void sortByTime();
     void reverseSort();
+    void fullScreenMode();
 
     QImage image;
     QLabel *imageLabel;
@@ -68,6 +68,7 @@ private:
     QPrinter printer;
 #endif
 
+    QAction *fullScreenAct{};
     QAction *sortReversedAct{};
     QAction *sortByNameAct{};
     QAction *sortByTimeAct{};
@@ -83,6 +84,8 @@ private:
     ImageIterator iterator;
 
     QDir::SortFlags sortOrder();
+
+    void scalePixmap(double factor);
 };
 
 #endif
