@@ -86,6 +86,13 @@ void ImageViewer::setImage(const QImage &newImage) {
     } else {
         imageLabel->adjustSize();
     }
+
+#ifdef Q_OS_MAC
+    const Qt::WindowStates &wState = windowState();
+    if (wState.testFlag(Qt::WindowMaximized) || wState.testFlag(Qt::WindowFullScreen)) {
+        repaint();
+    }
+#endif
 }
 
 bool ImageViewer::saveFile(const QString &fileName) {
@@ -191,11 +198,15 @@ void ImageViewer::paste() {
 }
 
 void ImageViewer::zoomIn() {
-    scaleImage(1.25);
+    if (scaleFactor <= 10) {
+        scaleImage(1.25);
+    }
 }
 
 void ImageViewer::zoomOut() {
-    scaleImage(0.8);
+    if (scaleFactor > 0.1) {
+        scaleImage(0.8);
+    }
 }
 
 void ImageViewer::normalSize() {
@@ -286,12 +297,14 @@ void ImageViewer::createActions() {
     sortReversedAct->setCheckable(true);
     viewMenu->addSeparator();
 
+#ifndef Q_OS_MAC
     fullScreenAct = viewMenu->addAction(tr("Fullscreen mode"), this, &ImageViewer::fullScreenMode);
     fullScreenAct->setCheckable(true);
     fullScreenAct->setShortcut(QKeySequence::FullScreen);
+#endif
 
     zoomInAct = viewMenu->addAction(tr("Zoom &In (25%)"), this, &ImageViewer::zoomIn);
-    zoomInAct->setShortcut(tr("Ctrl+="));//QKeySequence::ZoomIn);
+    zoomInAct->setShortcut(QKeySequence::ZoomIn);
 
     zoomOutAct = viewMenu->addAction(tr("Zoom &Out (25%)"), this, &ImageViewer::zoomOut);
     zoomOutAct->setShortcut(QKeySequence::ZoomOut);
@@ -311,6 +324,7 @@ void ImageViewer::createActions() {
     helpMenu->addAction(tr("About &Qt"), &QApplication::aboutQt);
 }
 
+#ifndef Q_OS_MAC
 void ImageViewer::fullScreenMode() {
     if (fullScreenAct->isChecked()) {
         if (!isFullScreen()) {
@@ -321,6 +335,7 @@ void ImageViewer::fullScreenMode() {
     }
 
 }
+#endif
 
 void ImageViewer::sortByName() {
     iterator.setSort(sortOrder().setFlag(QDir::Name));
@@ -418,7 +433,4 @@ void ImageViewer::scalePixmap(double factor) {
 
     adjustScrollBar(scrollArea->horizontalScrollBar(), factor);
     adjustScrollBar(scrollArea->verticalScrollBar(), factor);
-
-    zoomInAct->setEnabled(factor < 3.0);
-    zoomOutAct->setEnabled(factor > 0.333);
 }
