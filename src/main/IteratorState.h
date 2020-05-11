@@ -21,27 +21,23 @@ public:
 
     inline IteratorState(const IteratorState &other) = default;
 
-    inline IteratorState(QFileInfoList files, QDir::SortFlags sortBy):files(std::move(files)), sortBy(sortBy) {
+    inline IteratorState(QFileInfoList files, QDir::SortFlags sortBy): files(std::move(files)), sortBy(sortBy) {
     }
 
     inline IteratorState &operator=(const IteratorState &other) = default;
 
-    inline IteratorState(IteratorState &&other) noexcept:files(std::move(other.files)),uk(other.uk), sortBy(other.sortBy) {
+    inline IteratorState(IteratorState &&other) noexcept:files(std::move(other.files)), sortBy(other.sortBy), uk(other.uk) {
     }
 
     inline IteratorState &operator=(IteratorState &&other) noexcept {
         files = std::move(other.files);
-        uk = other.uk;
         sortBy = other.sortBy;
+        uk = other.uk;
         return *this;
     }
 
     inline const QFileInfoList& getFiles() const {
         return files;
-    }
-
-    inline int getUk() const {
-        return uk;
     }
 
     inline QDir::SortFlags getSortBy() const {
@@ -66,8 +62,8 @@ public:
         this->sortBy = sortBy;
     }
 private:
-    QDir::SortFlags sortBy;
     QFileInfoList files;
+    QDir::SortFlags sortBy;
     int uk = 0;
 
     QFileInfo current();

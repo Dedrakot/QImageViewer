@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <QImage>
 #include <QDirIterator>
+#include <QSettings>
 #include "ImageIterator.h"
 
 #if defined(QT_PRINTSUPPORT_LIB)
@@ -31,12 +32,14 @@ class ImageViewer : public QMainWindow {
 Q_OBJECT
 
 public:
-    ImageViewer(QWidget *parent = nullptr);
+    explicit ImageViewer(QWidget *parent = nullptr);
 
     bool loadFile(const QFileInfo &);
 
 public slots:
+
     void loadImage(const QString &filePath);
+
 private slots:
 
     void open();
@@ -59,13 +62,40 @@ private slots:
 
     void about();
 
+    void restoreSettings();
+
+    void dropSettings();
+
+    void saveGeometry();
+
+    void saveSort();
+
+    void saveScale();
+
+//    void savePath();
+
+    void dropGeometry();
+
+    void dropSort();
+
+    void dropScale();
+
+//    void dropPath();
+
+private:
+    void restoreScale();
+
+    void restoreGeometry();
+
+    void restoreSort();
+
+//    void restorePath();
 protected:
     void keyPressEvent(QKeyEvent *event) override;
 
     void resizeEvent(QResizeEvent *event) override;
 
 private:
-    bool isValid(const QString &typeName) const;
 
     void loadNext();
 
@@ -87,10 +117,18 @@ private:
 
     void reverseSort();
 
+    QDir::SortFlags sortOrder();
+
+    void scalePixmap(double factor);
+
+    void fullScreenMode();
+
     QImage image;
     QLabel *imageLabel;
     QScrollArea *scrollArea;
+    QSettings settings;
     double scaleFactor = 1;
+    ImageIterator iterator;
 
 #if defined(QT_PRINTSUPPORT_LIB) && QT_CONFIG(printer)
     QPrinter printer;
@@ -106,14 +144,6 @@ private:
     QAction *zoomOutAct{};
     QAction *normalSizeAct{};
     QAction *fitToWindowAct{};
-
-    ImageIterator iterator;
-
-    QDir::SortFlags sortOrder();
-
-    void scalePixmap(double factor);
-
-    void fullScreenMode();
 };
 
 #endif

@@ -19,6 +19,7 @@
 #include <QStatusBar>
 #include <QKeyEvent>
 #include <QDateTime>
+#include <QtCore/QSettings>
 
 #if defined(QT_PRINTSUPPORT_LIB)
 #  include <QtPrintSupport/qtprintsupportglobal.h>
@@ -28,8 +29,13 @@
 #  endif
 #endif
 
-ImageViewer::ImageViewer(QWidget *parent)
-        : QMainWindow(parent), imageLabel(new QLabel), scrollArea(new QScrollArea) {
+const QString SETTINGS_SORT = "view/sort";
+const QString SETTINGS_GEOMETRY = "view/geometry";
+const QString SETTINGS_SCALE = "view/scale";
+//const QString SETTINGS_PATH = "view/path";
+
+ImageViewer::ImageViewer(QWidget *parent) : QMainWindow(parent), imageLabel(new QLabel), scrollArea(new QScrollArea),
+                                            settings("Dedrakot", "ImageViewer") {
     imageLabel->setBackgroundRole(QPalette::Base);
     imageLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
     imageLabel->setScaledContents(true);
@@ -42,7 +48,7 @@ ImageViewer::ImageViewer(QWidget *parent)
 
     createActions();
 
-    resize(QGuiApplication::primaryScreen()->availableSize() * 3 / 5);
+    restoreSettings();
 }
 
 bool ImageViewer::loadFile(const QFileInfo &file) {
@@ -280,7 +286,7 @@ void ImageViewer::createActions() {
 
     QMenu *viewMenu = menuBar()->addMenu(tr("&View"));
 
-    QActionGroup *actionGroup = new QActionGroup(this);
+    auto *actionGroup = new QActionGroup(this);
     actionGroup->setExclusive(true);
 
     sortByNameAct = viewMenu->addAction(tr("Sort by name"), this, &ImageViewer::sortByName);
@@ -317,6 +323,19 @@ void ImageViewer::createActions() {
 
     QMenu *helpMenu = menuBar()->addMenu(tr("&Help"));
 
+    QMenu *settingsMenu = helpMenu->addMenu(tr("Settings"));
+
+    settingsMenu->addAction(tr("&Restore Settings"), this, &ImageViewer::restoreSettings);
+    settingsMenu->addAction(tr("&Save Geometry"), this, &ImageViewer::saveGeometry);
+    settingsMenu->addAction(tr("&Save Sort"), this, &ImageViewer::saveSort);
+    settingsMenu->addAction(tr("&Save Scale"), this, &ImageViewer::saveScale);
+//    settings->addAction(tr("&Save Path"), this, &ImageViewer::savePath);
+    settingsMenu->addAction(tr("&Drop Settings"), this, &ImageViewer::dropSettings);
+    settingsMenu->addAction(tr("&Drop Geometry"), this, &ImageViewer::dropGeometry);
+    settingsMenu->addAction(tr("&Drop Sort"), this, &ImageViewer::dropSort);
+    settingsMenu->addAction(tr("&Drop Scale"), this, &ImageViewer::dropScale);
+//    settings->addAction(tr("&Drop Path"), this, &ImageViewer::dropPath);
+
     helpMenu->addAction(tr("&About"), this, &ImageViewer::about);
     helpMenu->addAction(tr("About &Qt"), &QApplication::aboutQt);
 }
@@ -330,17 +349,17 @@ void ImageViewer::fullScreenMode() {
 }
 
 void ImageViewer::sortByName() {
-    iterator.setSort(sortOrder().setFlag(QDir::Name));
+    iterator.setSortFlags(sortOrder().setFlag(QDir::Name));
 }
 
 void ImageViewer::sortByTime() {
-    iterator.setSort(sortOrder().setFlag(QDir::Time));
+    iterator.setSortFlags(sortOrder().setFlag(QDir::Time));
 }
 
 void ImageViewer::reverseSort() {
     QDir::SortFlags flags = iterator.getSortFlags();
     const QDir::SortFlags &order = sortOrder();
-    iterator.setSort(order.testFlag(QDir::Reversed) ? flags.setFlag(QDir::Reversed) : flags ^ QDir::Reversed);
+    iterator.setSortFlags(order.testFlag(QDir::Reversed) ? flags.setFlag(QDir::Reversed) : flags ^ QDir::Reversed);
 }
 
 
@@ -430,3 +449,99 @@ void ImageViewer::scalePixmap(double factor) {
 void ImageViewer::loadImage(const QString &filePath) {
     loadFile(filePath);
 }
+
+void ImageViewer::restoreSettings() {
+    restoreScale();
+    restoreSort();
+    restoreGeometry();
+    restorePath();
+}
+
+void ImageViewer::restoreScale() {
+    settings.beginGroup(SETTINGS_SCALE);
+    scaleFactor = settings.value("scale", 1.0).value<double>();
+    fitToWindowAct->setChecked(settings.value("fit", true).value<bool>());
+    settings.endGroup();
+}
+
+void ImageViewer::restoreGeometry() {
+    settings.beginGroup(SETTINGS_GEOMETRY);
+    QSize wSize = settings.value("size", QSize()).value<QSize>();
+    QPoint wPos = settings.value("pos", QPoint()).value<QPoint>();
+    Qt::WindowStates wState = (Qt::WindowStates) settings.value("flags", (int) Qt::WindowActive).value<int>();
+    settings.endGroup();
+
+
+    resize(wSize.isEmpty() ? QGuiApplication::primaryScreen()->availableSize() * 3 / 5 : wSize);
+    if (!wPos.isNull()) {
+        move(wPos);
+    }
+    setWindowState(wState);
+}
+
+void ImageViewer::restoreSort() {
+    QDir::SortFlags sortFlags = QDir::Name;
+    if (settings.contains(SETTINGS_SORT)) {
+        sortFlags = (QDir::SortFlags) settings.value(SETTINGS_SORT).value<int>();
+    }
+    iterator.setSortFlags(sortFlags);
+
+    if (sortFlags.testFlag(QDir::Time)) {
+        sortByTimeAct->setChecked(true);
+    } else {
+        sortByNameAct->setChecked(true);
+    }
+
+    sortReversedAct->setChecked(sortFlags.testFlag(QDir::Reversed));
+}
+
+//void ImageViewer::restorePath() {
+//
+//}
+
+void ImageViewer::dropSettings() {
+    settings.clear();
+//    dropSort();
+//    dropScale();
+//    dropGeometry();
+//    dropPath();
+}
+
+void ImageViewer::saveGeometry() {
+    settings.beginGroup(SETTINGS_GEOMETRY);
+    settings.setValue("flags", (int) windowState());
+    settings.setValue("size", size());
+    settings.setValue("pos", pos());
+    settings.endGroup();
+}
+
+void ImageViewer::saveSort() {
+    settings.setValue(SETTINGS_SORT, (int) iterator.getSortFlags());
+}
+
+void ImageViewer::saveScale() {
+    settings.beginGroup(SETTINGS_SCALE);
+    settings.setValue("scale", scaleFactor);
+    settings.setValue("fit", fitToWindowAct->isChecked());
+    settings.endGroup();
+}
+
+//void ImageViewer::savePath() {
+//
+//}
+
+void ImageViewer::dropGeometry() {
+    settings.remove(SETTINGS_GEOMETRY);
+}
+
+void ImageViewer::dropSort() {
+    settings.remove(SETTINGS_SORT);
+}
+
+void ImageViewer::dropScale() {
+    settings.remove(SETTINGS_SCALE);
+}
+
+//void ImageViewer::dropPath() {
+//
+//}

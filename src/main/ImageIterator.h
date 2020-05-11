@@ -11,14 +11,12 @@
 #include <QFuture>
 #include "IteratorState.h"
 
-class QDirIterator;
-
 class ImageIterator {
 public:
 
     void setFile(const QFileInfo &file);
 
-    void setSort(QDir::SortFlags sortBy);
+    void setSortFlags(QDir::SortFlags sortBy);
 
     bool canIterate();
 
@@ -26,7 +24,7 @@ public:
 
     QFileInfo previous();
 
-    int knownSize() const;
+    int directorySize() const;
 
     inline QDir::SortFlags getSortFlags() const {
         return state.getSortBy();

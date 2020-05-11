@@ -65,7 +65,7 @@ QStringList defaultFilters() {
     return ret;
 }
 
-int ImageIterator::knownSize() const {
+int ImageIterator::directorySize() const {
     return state.getFiles().size();
 }
 
@@ -79,7 +79,7 @@ void ImageIterator::waitStateFuture() {
     }
 }
 
-void ImageIterator::setSort(QDir::SortFlags sortBy) {
+void ImageIterator::setSortFlags(QDir::SortFlags sortBy) {
     waitStateFuture();
     if (state.getSortBy() != sortBy) {
         IteratorState newState(state);
