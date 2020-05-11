@@ -321,9 +321,7 @@ void ImageViewer::createActions() {
     fitToWindowAct->setCheckable(true);
     fitToWindowAct->setShortcut(tr("Ctrl+F"));
 
-    QMenu *helpMenu = menuBar()->addMenu(tr("&Help"));
-
-    QMenu *settingsMenu = helpMenu->addMenu(tr("Settings"));
+    QMenu *settingsMenu = menuBar()->addMenu(tr("Settings"));
 
     settingsMenu->addAction(tr("&Restore Settings"), this, &ImageViewer::restoreSettings);
     settingsMenu->addAction(tr("&Save Geometry"), this, &ImageViewer::saveGeometry);
@@ -336,6 +334,8 @@ void ImageViewer::createActions() {
     settingsMenu->addAction(tr("&Drop Scale"), this, &ImageViewer::dropScale);
 //    settings->addAction(tr("&Drop Path"), this, &ImageViewer::dropPath);
 
+    QMenu *helpMenu = menuBar()->addMenu(tr("&Help"));
+
     helpMenu->addAction(tr("&About"), this, &ImageViewer::about);
     helpMenu->addAction(tr("About &Qt"), &QApplication::aboutQt);
 }
@@ -343,7 +343,7 @@ void ImageViewer::createActions() {
 void ImageViewer::fullScreenMode() {
     if (isFullScreen()) {
         showNormal();
-    } else if (isFullScreen()) {
+    } else {
         showFullScreen();
     }
 }
@@ -454,7 +454,6 @@ void ImageViewer::restoreSettings() {
     restoreScale();
     restoreSort();
     restoreGeometry();
-    restorePath();
 }
 
 void ImageViewer::restoreScale() {
