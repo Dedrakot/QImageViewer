@@ -36,6 +36,11 @@ public:
 
     bool loadFile(const QFileInfo &, bool showWarn = true);
 
+#ifdef Q_OS_MAC
+protected:
+    bool event(QEvent *event) override;
+#endif
+
 public slots:
 
     void loadImage(const QString &filePath);

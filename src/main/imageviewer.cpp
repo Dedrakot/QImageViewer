@@ -545,7 +545,7 @@ void ImageViewer::saveScale() {
 
 void ImageViewer::savePath() {
     QFileInfo filePath(windowFilePath());
-    settings.setValue(SETTINGS_PATH, (filePath.isDir() ? QDir(filePath.path()): filePath.dir()).absolutePath());
+    settings.setValue(SETTINGS_PATH, (filePath.isDir() ? QDir(filePath.path()) : filePath.dir()).absolutePath());
 }
 
 void ImageViewer::dropGeometry() {
@@ -563,3 +563,23 @@ void ImageViewer::dropScale() {
 void ImageViewer::dropPath() {
     settings.remove(SETTINGS_PATH);
 }
+
+#ifdef Q_OS_MAC
+bool ImageViewer::event(QEvent *event) {
+    if (event->type() == QEvent::NativeGesture) {
+        QNativeGestureEvent *nge = static_cast<QNativeGestureEvent *>(event);
+        if (nge->gestureType() == Qt::ZoomNativeGesture) {
+            double v = nge->value();
+            double factor;
+            if (v < 0) {
+                factor = 1 - v;
+            } else {
+                factor = 1 + v;
+            }
+            scaleImage(factor);
+            return true;
+        }
+    }
+    return QMainWindow::event(event);
+}
+#endif
