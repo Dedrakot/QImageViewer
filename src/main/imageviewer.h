@@ -130,6 +130,8 @@ private:
 
     void fullScreenMode();
 
+    bool canZoom(double factor);
+
     QImage image;
     QLabel *imageLabel;
     QScrollArea *scrollArea;

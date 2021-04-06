@@ -35,7 +35,7 @@ const QString SETTINGS_SCALE = "view/scale";
 const QString SETTINGS_PATH = "view/path";
 
 ImageViewer::ImageViewer(QWidget *parent) : QMainWindow(parent), imageLabel(new QLabel), scrollArea(new QScrollArea),
-                                            settings("Dedrakot", "ImageViewer") {
+    settings("Dedrakot", "ImageViewer") {
     imageLabel->setBackgroundRole(QPalette::Base);
     imageLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
     imageLabel->setScaledContents(true);
@@ -61,7 +61,7 @@ bool ImageViewer::loadFile(const QFileInfo &file, bool showWarn) {
         if (showWarn) {
             QMessageBox::information(this, QGuiApplication::applicationDisplayName(),
                                      tr("Cannot load %1: %2")
-                                             .arg(QDir::toNativeSeparators(filePath), reader.errorString()));
+                                     .arg(QDir::toNativeSeparators(filePath), reader.errorString()));
         }
         return false;
     }
@@ -72,7 +72,7 @@ bool ImageViewer::loadFile(const QFileInfo &file, bool showWarn) {
 
     const QString message = tr("Opened \"%1\", %2x%3, Depth: %4, Modification time: %5")
             .arg(QDir::toNativeSeparators(filePath)).arg(image.width()).arg(image.height()).arg(image.depth()).arg(
-            file.lastModified().toString());
+                file.lastModified().toString());
     statusBar()->showMessage(message);
     return true;
 }
@@ -109,7 +109,7 @@ bool ImageViewer::saveFile(const QString &fileName) {
     if (!writer.write(image)) {
         QMessageBox::information(this, QGuiApplication::applicationDisplayName(),
                                  tr("Cannot write %1: %2")
-                                         .arg(QDir::toNativeSeparators(fileName)), writer.errorString());
+                                 .arg(QDir::toNativeSeparators(fileName)), writer.errorString());
         return false;
     }
     const QString message = tr("Wrote \"%1\"").arg(QDir::toNativeSeparators(fileName));
@@ -136,7 +136,7 @@ initializeImageFileDialog(QFileDialog &dialog, QFileDialog::AcceptMode acceptMod
 
     QStringList mimeTypeFilters;
     const QByteArrayList supportedMimeTypes = acceptMode == QFileDialog::AcceptOpen
-                                              ? QImageReader::supportedMimeTypes() : QImageWriter::supportedMimeTypes();
+            ? QImageReader::supportedMimeTypes() : QImageWriter::supportedMimeTypes();
     for (const QByteArray &mimeTypeName : supportedMimeTypes)
         mimeTypeFilters.append(mimeTypeName);
     mimeTypeFilters.sort();
@@ -225,13 +225,13 @@ void ImageViewer::paste() {
 }
 
 void ImageViewer::zoomIn() {
-    if (scaleFactor <= 10) {
+    if (canZoom(1.25)) {
         scaleImage(1.25);
     }
 }
 
 void ImageViewer::zoomOut() {
-    if (scaleFactor > 0.1) {
+    if (canZoom(0.8)) {
         scaleImage(0.8);
     }
 }
@@ -394,6 +394,13 @@ void ImageViewer::updateActions() {
 
 static void adjustScrollBar(QScrollBar *scrollBar, double factor);
 
+const int MAX_IMAGE_SIZE = 10000 * 7000;
+
+bool ImageViewer::canZoom(double factor) {
+    const QSize &imSize = (scaleFactor * factor) * imageLabel->pixmap()->size();
+    return imSize.width() > 0 && imSize.height() > 0 && imSize.width() * imSize.height() < MAX_IMAGE_SIZE;
+}
+
 void ImageViewer::scaleImage(double factor) {
     if (!image.isNull()) {
         scaleFactor *= factor;
@@ -413,12 +420,12 @@ void adjustScrollBar(QScrollBar *scrollBar, double factor) {
 
 void ImageViewer::keyPressEvent(QKeyEvent *event) {
     switch (event->key()) {
-        case Qt::Key_Backspace:
-            loadPrevious();
-            break;
-        case Qt::Key_Space:
-            loadNext();
-            break;
+    case Qt::Key_Backspace:
+        loadPrevious();
+        break;
+    case Qt::Key_Space:
+        loadNext();
+        break;
     }
 }
 
@@ -571,12 +578,23 @@ bool ImageViewer::event(QEvent *event) {
         if (nge->gestureType() == Qt::ZoomNativeGesture) {
             double v = nge->value();
             double factor;
-            if (v < 0) {
-                factor = 1 - v;
-            } else {
-                factor = 1 + v;
+            if (std::abs(v)>0.002) {
+                if (v < 0) {
+                    if (!canZoomOut()) {
+                        return true;
+                    }
+
+                } else if (!canZoomIn()) {
+                    return true;
+                }
+
+                factor = 1.0 + v;
+                scaleImage(factor);
+                const QString message = tr("Zoom native %1. Scale: %2")
+                        .arg(factor).arg(scaleFactor);
+                statusBar()->showMessage(message);
             }
-            scaleImage(factor);
+
             return true;
         }
     }
