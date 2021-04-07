@@ -1,8 +1,8 @@
 #include <QApplication>
 #include <QCommandLineParser>
 
-#include "imageviewer.h"
-#include "OpenEventApp.h"
+#include "main/ImageViewer.h"
+#include "main/OpenEventApp.h"
 
 int main(int argc, char *argv[])
 {
@@ -14,11 +14,10 @@ int main(int argc, char *argv[])
     commandLineParser.process(QCoreApplication::arguments());
     ImageViewer imageViewer;
     if (!commandLineParser.positionalArguments().isEmpty()
-        && !imageViewer.loadFile(commandLineParser.positionalArguments().front())) {
+        && !imageViewer.loadFile(QFileInfo(commandLineParser.positionalArguments().front()))) {
         return -1;
     }
-    QObject::connect(&app, &OpenEventApp::openRequest,
-            &imageViewer, &ImageViewer::loadImage);
+    QObject::connect(&app, &OpenEventApp::openRequest, &imageViewer, &ImageViewer::loadImage);
     imageViewer.show();
-    return app.exec();
+    return QApplication::exec();
 }

@@ -1,11 +1,15 @@
-#ifndef IMAGEVIEWER_H
-#define IMAGEVIEWER_H
+//
+// Created by ivan on 06.04.2021.
+//
+
+#ifndef IM_VIEW_IMAGEVIEWER_H
+#define IM_VIEW_IMAGEVIEWER_H
 
 #include <QMainWindow>
 #include <QImage>
 #include <QDirIterator>
 #include <QSettings>
-#include "ImageIterator.h"
+#include "AsyncFileIterator.h"
 
 #if defined(QT_PRINTSUPPORT_LIB)
 #  include <QtPrintSupport/qtprintsupportglobal.h>
@@ -35,11 +39,6 @@ public:
     explicit ImageViewer(QWidget *parent = nullptr);
 
     bool loadFile(const QFileInfo &, bool showWarn = true);
-
-#ifdef Q_OS_MAC
-protected:
-    bool event(QEvent *event) override;
-#endif
 
 public slots:
 
@@ -96,12 +95,16 @@ private:
 
     void restoreSort();
 
-    void restorePath();
+    static void restorePath();
+
 protected:
     void keyPressEvent(QKeyEvent *event) override;
 
     void resizeEvent(QResizeEvent *event) override;
 
+#ifdef Q_OS_MAC
+    bool event(QEvent *event) override;
+#endif
 private:
 
     void loadNext();
@@ -124,7 +127,7 @@ private:
 
     void reverseSort();
 
-    QDir::SortFlags sortOrder();
+    QDir::SortFlags sortFlags();
 
     void scalePixmap(double factor);
 
@@ -136,8 +139,8 @@ private:
     QLabel *imageLabel;
     QScrollArea *scrollArea;
     QSettings settings;
+    AsyncFileIterator iterator;
     double scaleFactor = 1;
-    ImageIterator iterator;
 
 #if defined(QT_PRINTSUPPORT_LIB) && QT_CONFIG(printer)
     QPrinter printer;
@@ -155,4 +158,4 @@ private:
     QAction *fitToWindowAct{};
 };
 
-#endif
+#endif //IM_VIEW_IMAGEVIEWER_H

@@ -1,16 +1,21 @@
-#include "IteratorState.h"
-#include <QDir>
+//
+// Created by ivan on 05.04.2021.
+//
+
+#include "FileIteratorState.h"
+
 #include <QDateTime>
 
-typedef bool (*FileComparator)(const QFileInfo &f1, const QFileInfo &f2);
+typedef int (*FileComparator)(const QFileInfo &f1, const QFileInfo &f2);
 
 class Comparator {
 public:
     Comparator(FileComparator cmp, bool reverse) : cmp(cmp), reverse(reverse) {}
 
     inline bool operator()(const QFileInfo &f1, const QFileInfo &f2) {
-        bool result = (*cmp)(f1, f2);
-        return reverse == !result;
+        int result = (*cmp)(f1, f2);
+
+        return result != 0 && (reverse ? result > 0 : result < 0);
     }
 
 private:
@@ -18,14 +23,13 @@ private:
     bool reverse;
 };
 
-bool sortByName(const QFileInfo &f1, const QFileInfo &f2) {
-    int r = f1.fileName().compare(f2.fileName());
-    return r < 0;
+inline int sortByName(const QFileInfo &f1, const QFileInfo &f2) {
+    return f1.fileName().compare(f2.fileName());
 }
 
-bool sortByTime(const QFileInfo &f1, const QFileInfo &f2) {
-    qint64 r = f1.lastModified().msecsTo(f2.lastModified());
-    return r > 0;
+inline int sortByTime(const QFileInfo &f1, const QFileInfo &f2) {
+    int result = f1.lastModified().msecsTo(f2.lastModified());
+    return result == 0 ? sortByName(f1, f2) : result;
 }
 
 inline Comparator comparator(QDir::SortFlags sortFlags) {
@@ -39,25 +43,25 @@ inline Comparator comparator(QDir::SortFlags sortFlags) {
     return {cmp, reverse};
 }
 
-bool IteratorState::sameDir(const QDir &dir) const {
+bool FileIteratorState::sameDir(const QDir &dir) const {
     return !files.isEmpty() && dir == files.at(0).dir();
 }
 
-bool IteratorState::sameFile(const QFileInfo &info) {
+bool FileIteratorState::sameFile(const QFileInfo &info) {
     return files.at(uk) == info;
 }
 
-void IteratorState::locate(const QFileInfo &file) {
+void FileIteratorState::locate(const QFileInfo &file) {
     if (file.isReadable()) {
         if (sortBy == QDir::NoSort) {
             for (int i = uk; i < files.size(); i++) {
-                if (files.at(i) == file) {
+                if (files.at(i).fileName() == file.fileName()) {
                     uk = i;
                     return;
                 }
             }
             for (int i = uk - 1; i >= 0; i--) {
-                if (files.at(i) == file) {
+                if (files.at(i).fileName() == file.fileName()) {
                     uk = i;
                     return;
                 }
@@ -69,9 +73,9 @@ void IteratorState::locate(const QFileInfo &file) {
                 int mid = (l + r) / 2;
                 QFileInfo f(files.at(mid));
                 if (cmp(file, f)) {
-                    r = mid;
+                        r = mid;
                 } else {
-                    if (f == file) {
+                    if (f.fileName() == file.fileName()) {
                         r = mid;
                         break;
                     }
@@ -83,27 +87,19 @@ void IteratorState::locate(const QFileInfo &file) {
     }
 }
 
-bool IteratorState::canIterate() const {
-    return files.size() > 1;
+QFileInfo FileIteratorState::next() {
+    if (uk >= files.size() - 1)
+        return QFileInfo();
+    return files.at(++uk);
 }
 
-QFileInfo IteratorState::next() {
-    ++uk;
-    if (uk >= files.size()) {
-        uk = 0;
-    }
-    return files.at(uk);
+QFileInfo FileIteratorState::previous() {
+    if (uk == 0)
+        return QFileInfo();
+    return files.at(--uk);
 }
 
-QFileInfo IteratorState::previous() {
-    --uk;
-    if (uk < 0) {
-        uk = files.isEmpty() ? 0 : files.size() - 1;
-    }
-    return files.at(uk);
-}
-
-void IteratorState::sort() {
+void FileIteratorState::sort() {
     QFileInfo f(current());
     if (sortBy != QDir::NoSort) {
         std::sort(files.begin(), files.end(), comparator(sortBy));
@@ -111,11 +107,11 @@ void IteratorState::sort() {
     locate(f);
 }
 
-QFileInfo IteratorState::current() const {
+QFileInfo FileIteratorState::current() const {
     return uk < files.size() ? files.at(uk) : QFileInfo();
 }
 
-void IteratorState::remove() {
+void FileIteratorState::remove() {
     if (uk < files.size()) {
         files.removeAt(uk--);
         if (uk < 0) {
@@ -124,8 +120,12 @@ void IteratorState::remove() {
     }
 }
 
-QString IteratorState::filePath() const {
-    return uk < files.size() ? files.at(uk).filePath() : QString();
+void FileIteratorState::goBack() {
+    if (!files.isEmpty()) {
+        uk = static_cast<int>(files.size()) - 1;
+    }
 }
 
-
+void FileIteratorState::goFront() {
+    uk = 0;
+}

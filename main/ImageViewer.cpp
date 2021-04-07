@@ -1,4 +1,8 @@
-#include "imageviewer.h"
+//
+// Created by ivan on 06.04.2021.
+//
+
+#include "ImageViewer.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -13,13 +17,15 @@
 #include <QMimeData>
 #include <QPainter>
 #include <QScreen>
-#include <QScrollArea>
 #include <QScrollBar>
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QKeyEvent>
-#include <QDateTime>
 #include <QtCore/QSettings>
+#include <QActionGroup>
+
+#include "HandDragScrollArea.h"
+#include "utils.h"
 
 #if defined(QT_PRINTSUPPORT_LIB)
 #  include <QtPrintSupport/qtprintsupportglobal.h>
@@ -34,8 +40,10 @@ const QString SETTINGS_GEOMETRY = "view/geometry";
 const QString SETTINGS_SCALE = "view/scale";
 const QString SETTINGS_PATH = "view/path";
 
-ImageViewer::ImageViewer(QWidget *parent) : QMainWindow(parent), imageLabel(new QLabel), scrollArea(new QScrollArea),
-    settings("Dedrakot", "ImageViewer") {
+ImageViewer::ImageViewer(QWidget *parent) : QMainWindow(parent), imageLabel(new QLabel),
+                                            scrollArea(new HandDragScrollArea),
+                                            settings("Dedrakot", "ImageViewer"),
+                                            iterator(supportedImageFilters()) {
     imageLabel->setBackgroundRole(QPalette::Base);
     imageLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
     imageLabel->setScaledContents(true);
@@ -61,7 +69,7 @@ bool ImageViewer::loadFile(const QFileInfo &file, bool showWarn) {
         if (showWarn) {
             QMessageBox::information(this, QGuiApplication::applicationDisplayName(),
                                      tr("Cannot load %1: %2")
-                                     .arg(QDir::toNativeSeparators(filePath), reader.errorString()));
+                                             .arg(QDir::toNativeSeparators(filePath), reader.errorString()));
         }
         return false;
     }
@@ -72,7 +80,7 @@ bool ImageViewer::loadFile(const QFileInfo &file, bool showWarn) {
 
     const QString message = tr("Opened \"%1\", %2x%3, Depth: %4, Modification time: %5")
             .arg(QDir::toNativeSeparators(filePath)).arg(image.width()).arg(image.height()).arg(image.depth()).arg(
-                file.lastModified().toString());
+            file.lastModified().toString());
     statusBar()->showMessage(message);
     return true;
 }
@@ -85,15 +93,7 @@ void ImageViewer::setImage(const QImage &newImage) {
 
     scrollArea->setVisible(true);
     printAct->setEnabled(true);
-    updateActions();
-
-    if (fitToWindowAct->isChecked()) {
-        fitToWindow();
-    } else if (scaleFactor != 1.0) {
-        scalePixmap(scaleFactor);
-    } else {
-        imageLabel->adjustSize();
-    }
+    fitToWindow();
 
 #ifdef Q_OS_MAC
     const Qt::WindowStates &wState = windowState();
@@ -109,7 +109,7 @@ bool ImageViewer::saveFile(const QString &fileName) {
     if (!writer.write(image)) {
         QMessageBox::information(this, QGuiApplication::applicationDisplayName(),
                                  tr("Cannot write %1: %2")
-                                 .arg(QDir::toNativeSeparators(fileName)), writer.errorString());
+                                         .arg(QDir::toNativeSeparators(fileName)), writer.errorString());
         return false;
     }
     const QString message = tr("Wrote \"%1\"").arg(QDir::toNativeSeparators(fileName));
@@ -136,7 +136,7 @@ initializeImageFileDialog(QFileDialog &dialog, QFileDialog::AcceptMode acceptMod
 
     QStringList mimeTypeFilters;
     const QByteArrayList supportedMimeTypes = acceptMode == QFileDialog::AcceptOpen
-            ? QImageReader::supportedMimeTypes() : QImageWriter::supportedMimeTypes();
+                                              ? QImageReader::supportedMimeTypes() : QImageWriter::supportedMimeTypes();
     for (const QByteArray &mimeTypeName : supportedMimeTypes)
         mimeTypeFilters.append(mimeTypeName);
     mimeTypeFilters.sort();
@@ -150,7 +150,7 @@ void ImageViewer::open() {
     QFileDialog dialog(this, tr("Open File"));
     initializeImageFileDialog(dialog, QFileDialog::AcceptOpen, settings);
 
-    while (dialog.exec() == QDialog::Accepted && !loadFile(dialog.selectedFiles().first())) {}
+    while (dialog.exec() == QDialog::Accepted && !loadFile(QFileInfo(dialog.selectedFiles().first()))) {}
 }
 
 void ImageViewer::saveAs() {
@@ -161,18 +161,18 @@ void ImageViewer::saveAs() {
 }
 
 void ImageViewer::deleteFile() {
-    QFile file(iterator.getCurrentFile());
+    QFile file(iterator.current().absoluteFilePath());
 
     if (QMessageBox::Yes == QMessageBox::question(this, tr("Remove file"),
                                                   QString(tr("Do you want to remove \"%1\"")).arg(file.fileName()))) {
         file.remove();
-        iterator.removeCurrent();
-        loadFile(iterator.getCurrentFile(), false);
+        iterator.remove();
+        loadFile(iterator.current(), false);
     }
 }
 
 void ImageViewer::print() {
-    Q_ASSERT(imageLabel->pixmap());
+    Q_ASSERT(!imageLabel->pixmap().isNull());
 #if defined(QT_PRINTSUPPORT_LIB) && QT_CONFIG(printdialog)
     QPrintDialog dialog(&printer, this);
     if (dialog.exec()) {
@@ -238,24 +238,23 @@ void ImageViewer::zoomOut() {
 
 void ImageViewer::normalSize() {
     scaleFactor = 1.0;
-    if (fitToWindowAct->isChecked()) {
-        fitToWindow();
-    } else {
-        imageLabel->adjustSize();
-    }
+    imageLabel->adjustSize();
 }
 
 void ImageViewer::fitToWindow() {
     if (!image.isNull()) {
-        bool fitToWindow = fitToWindowAct->isChecked();
-        if (fitToWindow) {
+        if (fitToWindowAct->isChecked()) {
             QSize size = image.size();
-            const int delta = 2;
-            double newScaleFactor = std::min((double) (scrollArea->width() - delta) / size.width(),
-                                             (double) (scrollArea->height() - delta) / size.height());
-            scalePixmap(std::min(scaleFactor, newScaleFactor));
-        } else {
+            const int deltaX = 2;
+            const int deltaY = statusBar()->isVisible() ? deltaX : statusBar()->height() - 5;
+            double newScaleFactor = std::min((double) (scrollArea->width() - deltaX) / size.width(),
+                                             (double) (scrollArea->height() - deltaY) / size.height());
+            scaleFactor = std::min(1.0, newScaleFactor);
+        }
+        if (scaleFactor != 1.0) {
             scalePixmap(scaleFactor);
+        } else {
+            imageLabel->adjustSize();
         }
     }
     updateActions();
@@ -317,10 +316,13 @@ void ImageViewer::createActions() {
     sortByNameAct->setActionGroup(actionGroup);
     sortByNameAct->setCheckable(true);
     sortByNameAct->setChecked(true);
+    sortByNameAct->setData(QDir::Name);
 
     sortByTimeAct = viewMenu->addAction(tr("Sort by time"), this, &ImageViewer::sortByTime);
     sortByTimeAct->setActionGroup(actionGroup);
     sortByTimeAct->setCheckable(true);
+    sortByTimeAct->setData(QDir::Time);
+
 
     viewMenu->addSeparator();
     sortReversedAct = viewMenu->addAction(tr("Reversed"), this, &ImageViewer::reverseSort);
@@ -331,7 +333,7 @@ void ImageViewer::createActions() {
     fullScreenAct->setShortcut(QKeySequence::FullScreen);
 
     zoomInAct = viewMenu->addAction(tr("Zoom &In (25%)"), this, &ImageViewer::zoomIn);
-    zoomInAct->setShortcut(tr("Ctrl+="));//QKeySequence::ZoomIn);
+    zoomInAct->setShortcuts({tr("Ctrl+="), tr("Ctrl++")});//QKeySequence::ZoomIn);
 
     zoomOutAct = viewMenu->addAction(tr("Zoom &Out (25%)"), this, &ImageViewer::zoomOut);
     zoomOutAct->setShortcut(QKeySequence::ZoomOut);
@@ -373,17 +375,15 @@ void ImageViewer::fullScreenMode() {
 }
 
 void ImageViewer::sortByName() {
-    iterator.setSortFlags(sortOrder().setFlag(QDir::Name));
+    iterator.setSortFlags(sortFlags().setFlag(QDir::Name));
 }
 
 void ImageViewer::sortByTime() {
-    iterator.setSortFlags(sortOrder().setFlag(QDir::Time));
+    iterator.setSortFlags(sortFlags().setFlag(QDir::Time));
 }
 
 void ImageViewer::reverseSort() {
-    QDir::SortFlags flags = iterator.getSortFlags();
-    const QDir::SortFlags &order = sortOrder();
-    iterator.setSortFlags(order.testFlag(QDir::Reversed) ? flags.setFlag(QDir::Reversed) : flags ^ QDir::Reversed);
+    iterator.setSortFlags(sortFlags());
 }
 
 
@@ -394,21 +394,17 @@ void ImageViewer::updateActions() {
 
 static void adjustScrollBar(QScrollBar *scrollBar, double factor);
 
-const int MAX_IMAGE_SIZE = 10000 * 7000;
+const int MAX_IMAGE_SIZE = 20000 * 20000;
 
 bool ImageViewer::canZoom(double factor) {
-    const QSize &imSize = (scaleFactor * factor) * imageLabel->pixmap()->size();
+    const QSize &imSize = (scaleFactor * factor) * imageLabel->pixmap().size();
     return imSize.width() > 0 && imSize.height() > 0 && imSize.width() * imSize.height() < MAX_IMAGE_SIZE;
 }
 
 void ImageViewer::scaleImage(double factor) {
     if (!image.isNull()) {
         scaleFactor *= factor;
-        if (fitToWindowAct->isChecked()) {
-            fitToWindow();
-        } else {
-            scalePixmap(scaleFactor);
-        }
+        scalePixmap(scaleFactor);
     }
 }
 
@@ -420,12 +416,12 @@ void adjustScrollBar(QScrollBar *scrollBar, double factor) {
 
 void ImageViewer::keyPressEvent(QKeyEvent *event) {
     switch (event->key()) {
-    case Qt::Key_Backspace:
-        loadPrevious();
-        break;
-    case Qt::Key_Space:
-        loadNext();
-        break;
+        case Qt::Key_Backspace:
+            loadPrevious();
+            break;
+        case Qt::Key_Space:
+            loadNext();
+            break;
     }
 }
 
@@ -434,48 +430,69 @@ void ImageViewer::resizeEvent(QResizeEvent *event) {
         fitToWindow();
 }
 
-QFileInfo iterate(ImageIterator &iterator, QFileInfo (ImageIterator::*next)()) {
-    if (iterator.canIterate()) {
-        QFileInfo f((&iterator->*next)().filePath());
-        if (!f.isReadable()) {
-            QFileInfo current(f);
-            do {
-                iterator.removeCurrent();
-                f = (&iterator->*next)().filePath();
-            } while (!f.isReadable() && !iterator.isEmpty());
-        }
-        return f;
+QFileInfo iterate(FileIterator &iterator, QFileInfo (FileIterator::*next)()) {
+    QFileInfo f((&iterator->*next)());
+    if (!f.fileName().isEmpty() && !f.isReadable()) {
+        QFileInfo current(f);
+        do {
+            iterator.remove();
+            f = (&iterator->*next)();
+        } while (!f.isReadable() && !f.fileName().isEmpty());
     }
-    return QFileInfo();
+    return f;
 }
 
 void ImageViewer::loadNext() {
-    QFileInfo f(iterate(iterator, &ImageIterator::next));
+    QFileInfo f(iterate(iterator, &FileIterator::next));
+    bool notifyLoop = false;
+    if (f.fileName().isEmpty()) {
+        f = iterator.first();
+        notifyLoop = true;
+    }
     if (f.isReadable() && windowFilePath() != f.filePath()) {
         loadFile(f);
+        if (notifyLoop) {
+            statusBar()->showMessage(statusBar()->currentMessage() + " | Returned to the first one");
+        }
     }
 }
 
 void ImageViewer::loadPrevious() {
-    QFileInfo f(iterate(iterator, &ImageIterator::previous));
+    QFileInfo f(iterate(iterator, &FileIterator::previous));
+    bool notifyLoop = false;
+    if (f.fileName().isEmpty()) {
+        f = iterator.last();
+        notifyLoop = true;
+    }
     if (f.isReadable() && windowFilePath() != f.filePath()) {
         loadFile(f);
+        if (notifyLoop) {
+            statusBar()->showMessage(statusBar()->currentMessage() + " | Returned to the last one");
+        }
     }
 }
 
-QDir::SortFlags ImageViewer::sortOrder() {
-    return sortReversedAct->isChecked() ? QDir::Reversed : QDir::Name;
+QDir::SortFlags ImageViewer::sortFlags() {
+    QDir::SortFlags flags = QDir::Name;
+    QDir::SortFlags reverse = sortReversedAct->isChecked() ? QDir::Reversed : QDir::Name;
+    for (const auto &sortAction: sortByNameAct->actionGroup()->actions()) {
+        if (sortAction->isChecked()) {
+            return static_cast<QDir::SortFlags>(sortAction->data().toInt()) ^ reverse;
+
+        }
+    }
+    return flags ^ reverse;
 }
 
 void ImageViewer::scalePixmap(double factor) {
-    imageLabel->resize(factor * imageLabel->pixmap()->size());
+    imageLabel->resize(factor * imageLabel->pixmap().size());
 
     adjustScrollBar(scrollArea->horizontalScrollBar(), factor);
     adjustScrollBar(scrollArea->verticalScrollBar(), factor);
 }
 
 void ImageViewer::loadImage(const QString &filePath) {
-    loadFile(filePath);
+    loadFile(QFileInfo(filePath));
 }
 
 void ImageViewer::restoreSettings() {
@@ -540,7 +557,7 @@ void ImageViewer::saveGeometry() {
 }
 
 void ImageViewer::saveSort() {
-    settings.setValue(SETTINGS_SORT, (int) iterator.getSortFlags());
+    settings.setValue(SETTINGS_SORT, (int) sortFlags());
 }
 
 void ImageViewer::saveScale() {
@@ -579,22 +596,15 @@ bool ImageViewer::event(QEvent *event) {
             double v = nge->value();
             double factor;
             if (std::abs(v)>0.002) {
-                if (v < 0) {
-                    if (!canZoomOut()) {
-                        return true;
-                    }
-
-                } else if (!canZoomIn()) {
+                factor = 1.0 + v;
+                if (!canZoom(factor)) {
                     return true;
                 }
-
-                factor = 1.0 + v;
                 scaleImage(factor);
-                const QString message = tr("Zoom native %1. Scale: %2")
+                const QString message = tr("Zoom diff %1. Scale: %2")
                         .arg(factor).arg(scaleFactor);
                 statusBar()->showMessage(message);
             }
-
             return true;
         }
     }

@@ -1,41 +1,47 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.17)
+project(im_view)
 
-project(ImageViewer LANGUAGES CXX)
-
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
-
-set(CMAKE_AUTOUIC ON)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
 
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(QT_VERSION 6)
+set(REQUIRED_LIBS Core Gui Widgets Test)
+set(OPTIONAL_LIBS PrintSupport)
+set(REQUIRED_LIBS_QUALIFIED Qt6::Core Qt6::Gui Qt6::Widgets)
+set(OPTIONAL_LIBS_QUALIFIED Qt6::PrintSupport)
 
-find_package(Qt5 COMPONENTS Widgets REQUIRED)
-find_package(Qt5 COMPONENTS PrintSupport QUIET)
-find_package(Qt5 COMPONENTS Test REQUIRED)
-enable_testing(true)
+set(LIB_SOURCES include/FileIterator.h main/AsyncFileIterator.h main/AsyncFileIterator.cpp
+        main/FileIteratorState.h main/FileIteratorState.cpp
+        include/utils.h main/utils.cpp)
 
-add_executable(${PROJECT_NAME}
-        src/main/imageviewer.cpp
-        src/main/imageviewer.h
-        src/main/main.cpp src/main/ImageIterator.cpp src/main/ImageIterator.h src/main/IteratorState.h src/main/IteratorState.cpp src/main/OpenEventApp.h)
+include_directories(include)
 
-add_library(${PROJECT_NAME}_LIB
-        SHARED
-        src/main/imageviewer.cpp
-        src/main/imageviewer.h
-        src/main/ImageIterator.cpp src/main/ImageIterator.h src/main/IteratorState.h src/main/IteratorState.cpp)
+if (NOT CMAKE_PREFIX_PATH)
+    message(WARNING "CMAKE_PREFIX_PATH is not defined, you may need to set it "
+            "(-DCMAKE_PREFIX_PATH=\"path/to/Qt/lib/cmake\" or -DCMAKE_PREFIX_PATH=/usr/include/{host}/qt{version}/ on Ubuntu)")
+endif ()
 
-if(Qt5::PrintSupport_FOUND)
-  target_link_libraries(${PROJECT_NAME} Qt5::Widgets Qt5::PrintSupport)
-  target_link_libraries(${PROJECT_NAME}_LIB Qt5::Widgets Qt5::PrintSupport)
+add_executable(${PROJECT_NAME} main.cpp ${LIB_SOURCES} main/OpenEventApp.h main/ImageViewer.h main/ImageViewer.cpp
+        main/HandDragScrollArea.h main/HandDragScrollArea.cpp)
+add_library(${PROJECT_NAME}_LIB SHARED ${LIB_SOURCES})
+
+find_package(Qt${QT_VERSION} COMPONENTS ${REQUIRED_LIBS} REQUIRED)
+find_package(Qt${QT_VERSION} COMPONENTS ${OPTIONAL_LIBS} QUIET)
+
+if(Qt${QT_VERSION}::PrintSupport_FOUND)
+    target_link_libraries(${PROJECT_NAME} ${REQUIRED_LIBS_QUALIFIED} ${OPTIONAL_LIBS_QUALIFIED})
+    target_link_libraries(${PROJECT_NAME}_LIB ${REQUIRED_LIBS_QUALIFIED} ${OPTIONAL_LIBS_QUALIFIED})
 else()
-  target_link_libraries(${PROJECT_NAME} Qt5::Widgets)
-  target_link_libraries(${PROJECT_NAME}_LIB Qt5::Widgets)
+    target_link_libraries(${PROJECT_NAME} ${REQUIRED_LIBS_QUALIFIED})
+    target_link_libraries(${PROJECT_NAME}_LIB ${REQUIRED_LIBS_QUALIFIED})
 endif()
 
-add_executable(mytest src/test/test.cpp)
-add_test(NAME mytest COMMAND mytest)
+add_executable(iteratorTest test/AsyncFileIteratorTest.cpp)
+add_test(NAME iteratorTest COMMAND iteratorTest)
+target_link_libraries(iteratorTest PRIVATE ${PROJECT_NAME}_LIB Qt${QT_VERSION}::Test)
 
-target_link_libraries(mytest PRIVATE Qt5::Test) # ${PROJECT_NAME}_LIB)
+add_executable(utilsTest test/UtilsTest.cpp)
+add_test(NAME utilsTest COMMAND utilsTest)
+target_link_libraries(utilsTest PRIVATE ${PROJECT_NAME}_LIB Qt${QT_VERSION}::Test)
