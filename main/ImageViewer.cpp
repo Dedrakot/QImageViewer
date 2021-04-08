@@ -17,14 +17,12 @@
 #include <QMimeData>
 #include <QPainter>
 #include <QScreen>
-#include <QScrollBar>
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QKeyEvent>
 #include <QtCore/QSettings>
 #include <QActionGroup>
 
-#include "HandDragScrollArea.h"
 #include "utils.h"
 
 #if defined(QT_PRINTSUPPORT_LIB)
@@ -40,59 +38,59 @@ const QString SETTINGS_GEOMETRY = "view/geometry";
 const QString SETTINGS_SCALE = "view/scale";
 const QString SETTINGS_PATH = "view/path";
 
-ImageViewer::ImageViewer(QWidget *parent) : QMainWindow(parent), imageLabel(new QLabel),
-                                            scrollArea(new HandDragScrollArea),
-                                            settings("Dedrakot", "ImageViewer"),
-                                            iterator(supportedImageFilters()) {
-    imageLabel->setBackgroundRole(QPalette::Base);
-    imageLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
-    imageLabel->setScaledContents(true);
-
-    scrollArea->setBackgroundRole(QPalette::Dark);
-    scrollArea->setWidget(imageLabel);
-    scrollArea->setVisible(false);
-    scrollArea->setAlignment(Qt::AlignCenter);
-    setCentralWidget(scrollArea);
+ImageViewer::ImageViewer(ImageViewport *viewport, QWidget *parent) : QMainWindow(parent),
+                                                                     imageViewPort(viewport),
+                                                                     settings("Dedrakot", "ImageViewer"),
+                                                                     iterator(supportedImageFilters()) {
+    setCentralWidget(imageViewPort->widget());
 
     createActions();
 
     restoreSettings();
 }
 
-bool ImageViewer::loadFile(const QFileInfo &file, bool showWarn) {
+ImageViewer::~ImageViewer() {
+    delete imageViewPort;
+}
+
+bool ImageViewer::loadFile(const QFileInfo &file) {
     iterator.setFile(file);
     QString filePath = file.filePath();
+
     QImageReader reader(filePath);
     reader.setAutoTransform(true);
     const QImage newImage = reader.read();
+
     if (newImage.isNull()) {
-        if (showWarn) {
-            QMessageBox::information(this, QGuiApplication::applicationDisplayName(),
-                                     tr("Cannot load %1: %2")
-                                             .arg(QDir::toNativeSeparators(filePath), reader.errorString()));
-        }
+        const QString message = tr("Cannot load %1: %2")
+                .arg(QDir::toNativeSeparators(filePath), reader.errorString());
+        statusBar()->showMessage(message);
+    } else if (setImage(newImage)) {
+        setWindowFilePath(filePath);
+
+        const QString message = tr("Opened \"%1\", %2x%3, Depth: %4, Modification time: %5")
+                .arg(QDir::toNativeSeparators(filePath)).arg(image.width()).arg(image.height()).arg(
+                image.depth()).arg(
+                file.lastModified().toString());
+        statusBar()->showMessage(message);
+        return true;
+    }
+    return false;
+}
+
+bool ImageViewer::setImage(const QImage &newImage) {
+    if (newImage.isNull()) {
+        const QString message = tr("Invalid image");
+        statusBar()->showMessage(message);
         return false;
     }
 
-    setImage(newImage);
-
-    setWindowFilePath(filePath);
-
-    const QString message = tr("Opened \"%1\", %2x%3, Depth: %4, Modification time: %5")
-            .arg(QDir::toNativeSeparators(filePath)).arg(image.width()).arg(image.height()).arg(image.depth()).arg(
-            file.lastModified().toString());
-    statusBar()->showMessage(message);
-    return true;
-}
-
-void ImageViewer::setImage(const QImage &newImage) {
     image = newImage;
-    if (image.colorSpace().isValid())
+    if (newImage.colorSpace().isValid())
         image.convertToColorSpace(QColorSpace::SRgb);
-    imageLabel->setPixmap(QPixmap::fromImage(image));
 
-    scrollArea->setVisible(true);
-    printAct->setEnabled(true);
+    imageViewPort->setImage(image);
+
     fitToWindow();
 
 #ifdef Q_OS_MAC
@@ -101,6 +99,7 @@ void ImageViewer::setImage(const QImage &newImage) {
         repaint();
     }
 #endif
+    return true;
 }
 
 bool ImageViewer::saveFile(const QString &fileName) {
@@ -167,22 +166,22 @@ void ImageViewer::deleteFile() {
                                                   QString(tr("Do you want to remove \"%1\"")).arg(file.fileName()))) {
         file.remove();
         iterator.remove();
-        loadFile(iterator.current(), false);
+        loadFile(iterator.current());
     }
 }
 
 void ImageViewer::print() {
-    Q_ASSERT(!imageLabel->pixmap().isNull());
+    Q_ASSERT(!image.isNull());
 #if defined(QT_PRINTSUPPORT_LIB) && QT_CONFIG(printdialog)
     QPrintDialog dialog(&printer, this);
     if (dialog.exec()) {
         QPainter painter(&printer);
         QRect rect = painter.viewport();
-        QSize size = imageLabel->pixmap()->size();
+        QSize size = image.size();
         size.scale(rect.size(), Qt::KeepAspectRatio);
         painter.setViewport(rect.x(), rect.y(), size.width(), size.height());
-        painter.setWindow(imageLabel->pixmap()->rect());
-        painter.drawPixmap(0, 0, *imageLabel->pixmap());
+        painter.setWindow(image.rect());
+        painter.drawImage(0, 0, image);
     }
 #endif
 }
@@ -225,8 +224,8 @@ void ImageViewer::paste() {
 }
 
 void ImageViewer::zoomIn() {
-    if (canZoom(1.25)) {
-        scaleImage(1.25);
+    if (canZoom(1.2)) {
+        scaleImage(1.2);
     }
 }
 
@@ -238,24 +237,15 @@ void ImageViewer::zoomOut() {
 
 void ImageViewer::normalSize() {
     scaleFactor = 1.0;
-    imageLabel->adjustSize();
+    imageViewPort->scaleImage(1.0);
 }
 
 void ImageViewer::fitToWindow() {
     if (!image.isNull()) {
         if (fitToWindowAct->isChecked()) {
-            QSize size = image.size();
-            const int deltaX = 2;
-            const int deltaY = statusBar()->isVisible() ? deltaX : statusBar()->height() - 5;
-            double newScaleFactor = std::min((double) (scrollArea->width() - deltaX) / size.width(),
-                                             (double) (scrollArea->height() - deltaY) / size.height());
-            scaleFactor = std::min(1.0, newScaleFactor);
+            scaleFactor = imageViewPort->calcFitToViewport(statusBar()->isVisible() ? 0 : statusBar()->height());
         }
-        if (scaleFactor != 1.0) {
-            scalePixmap(scaleFactor);
-        } else {
-            imageLabel->adjustSize();
-        }
+        imageViewPort->scaleImage(scaleFactor);
     }
     updateActions();
 }
@@ -286,9 +276,11 @@ void ImageViewer::createActions() {
     saveAsAct = fileMenu->addAction(tr("&Save As..."), this, &ImageViewer::saveAs);
     saveAsAct->setEnabled(false);
 
+#if defined(QT_PRINTSUPPORT_LIB) && QT_CONFIG(printer)
     printAct = fileMenu->addAction(tr("&Print..."), this, &ImageViewer::print);
     printAct->setShortcut(QKeySequence::Print);
     printAct->setEnabled(false);
+#endif
 
     auto deleteAct = fileMenu->addAction(tr("&Delete"), this, &ImageViewer::deleteFile);
     deleteAct->setShortcut(QKeySequence::Delete);
@@ -390,28 +382,23 @@ void ImageViewer::reverseSort() {
 void ImageViewer::updateActions() {
     saveAsAct->setEnabled(!image.isNull());
     copyAct->setEnabled(!image.isNull());
+#if defined(QT_PRINTSUPPORT_LIB) && QT_CONFIG(printer)
+    printAct->setEnabled(!image.isNull());
+#endif
 }
-
-static void adjustScrollBar(QScrollBar *scrollBar, double factor);
 
 const int MAX_IMAGE_SIZE = 20000 * 20000;
 
 bool ImageViewer::canZoom(double factor) {
-    const QSize &imSize = (scaleFactor * factor) * imageLabel->pixmap().size();
+    const QSize &imSize = (scaleFactor * factor) * image.size();
     return imSize.width() > 0 && imSize.height() > 0 && imSize.width() * imSize.height() < MAX_IMAGE_SIZE;
 }
 
 void ImageViewer::scaleImage(double factor) {
     if (!image.isNull()) {
         scaleFactor *= factor;
-        scalePixmap(scaleFactor);
+        imageViewPort->scaleImage(scaleFactor);
     }
-}
-
-void adjustScrollBar(QScrollBar *scrollBar, double factor) {
-    int val = int(factor * scrollBar->value()
-                  + ((factor - 1) * scrollBar->pageStep() / 2));
-    scrollBar->setValue(val);
 }
 
 void ImageViewer::keyPressEvent(QKeyEvent *event) {
@@ -482,13 +469,6 @@ QDir::SortFlags ImageViewer::sortFlags() {
         }
     }
     return flags ^ reverse;
-}
-
-void ImageViewer::scalePixmap(double factor) {
-    imageLabel->resize(factor * imageLabel->pixmap().size());
-
-    adjustScrollBar(scrollArea->horizontalScrollBar(), factor);
-    adjustScrollBar(scrollArea->verticalScrollBar(), factor);
 }
 
 void ImageViewer::loadImage(const QString &filePath) {

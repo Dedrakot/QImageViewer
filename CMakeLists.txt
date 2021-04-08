@@ -24,7 +24,7 @@ if (NOT CMAKE_PREFIX_PATH)
 endif ()
 
 add_executable(${PROJECT_NAME} main.cpp ${LIB_SOURCES} main/OpenEventApp.h main/ImageViewer.h main/ImageViewer.cpp
-        main/HandDragScrollArea.h main/HandDragScrollArea.cpp)
+        main/HandDragScrollArea.h main/HandDragScrollArea.cpp main/BasicImageViewport.h main/BasicImageViewport.cpp)
 add_library(${PROJECT_NAME}_LIB SHARED ${LIB_SOURCES})
 
 find_package(Qt${QT_VERSION} COMPONENTS ${REQUIRED_LIBS} REQUIRED)

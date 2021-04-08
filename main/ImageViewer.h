@@ -10,6 +10,7 @@
 #include <QDirIterator>
 #include <QSettings>
 #include "AsyncFileIterator.h"
+#include "ImageViewport.h"
 
 #if defined(QT_PRINTSUPPORT_LIB)
 #  include <QtPrintSupport/qtprintsupportglobal.h>
@@ -36,9 +37,11 @@ class ImageViewer : public QMainWindow {
 Q_OBJECT
 
 public:
-    explicit ImageViewer(QWidget *parent = nullptr);
+    explicit ImageViewer(ImageViewport *viewport, QWidget *parent = nullptr);
 
-    bool loadFile(const QFileInfo &, bool showWarn = true);
+    ~ImageViewer() override;
+
+    bool loadFile(const QFileInfo &);
 
 public slots:
 
@@ -117,7 +120,7 @@ private:
 
     bool saveFile(const QString &fileName);
 
-    void setImage(const QImage &newImage);
+    bool setImage(const QImage &newImage);
 
     void scaleImage(double factor);
 
@@ -129,33 +132,29 @@ private:
 
     QDir::SortFlags sortFlags();
 
-    void scalePixmap(double factor);
-
     void fullScreenMode();
 
     bool canZoom(double factor);
 
     QImage image;
-    QLabel *imageLabel;
-    QScrollArea *scrollArea;
     QSettings settings;
     AsyncFileIterator iterator;
     double scaleFactor = 1;
 
 #if defined(QT_PRINTSUPPORT_LIB) && QT_CONFIG(printer)
     QPrinter printer;
+    QAction *printAct;
 #endif
-
-    QAction *sortReversedAct{};
-    QAction *sortByNameAct{};
-    QAction *sortByTimeAct{};
-    QAction *saveAsAct{};
-    QAction *printAct{};
-    QAction *copyAct{};
-    QAction *zoomInAct{};
-    QAction *zoomOutAct{};
-    QAction *normalSizeAct{};
-    QAction *fitToWindowAct{};
+    ImageViewport *imageViewPort;
+    QAction *sortReversedAct;
+    QAction *sortByNameAct;
+    QAction *sortByTimeAct;
+    QAction *saveAsAct;
+    QAction *copyAct;
+    QAction *zoomInAct;
+    QAction *zoomOutAct;
+    QAction *normalSizeAct;
+    QAction *fitToWindowAct;
 };
 
 #endif //IM_VIEW_IMAGEVIEWER_H

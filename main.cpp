@@ -4,15 +4,16 @@
 #include "main/ImageViewer.h"
 #include "main/OpenEventApp.h"
 
-int main(int argc, char *argv[])
-{
+#include "main/BasicImageViewport.h"
+
+int main(int argc, char *argv[]) {
     OpenEventApp app(argc, argv);
     QGuiApplication::setApplicationDisplayName(ImageViewer::tr("Image Viewer"));
     QCommandLineParser commandLineParser;
     commandLineParser.addHelpOption();
     commandLineParser.addPositionalArgument(ImageViewer::tr("[file]"), ImageViewer::tr("Image file to open."));
     commandLineParser.process(QCoreApplication::arguments());
-    ImageViewer imageViewer;
+    ImageViewer imageViewer(new BasicImageViewport());
     if (!commandLineParser.positionalArguments().isEmpty()
         && !imageViewer.loadFile(QFileInfo(commandLineParser.positionalArguments().front()))) {
         return -1;
