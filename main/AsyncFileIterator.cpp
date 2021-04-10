@@ -43,6 +43,10 @@ int AsyncFileIterator::directorySize() {
     return state.getFiles().size();
 }
 
+int AsyncFileIterator::currentPosition() {
+    return state.uk + 1;
+}
+
 FileIteratorState AsyncFileIterator::loadDir(const QStringList &iteratorFilters, const QFileInfo &file, QDir::SortFlags sortBy) {
     QFileInfoList files(file.dir().entryInfoList(iteratorFilters, QDir::Files | QDir::Readable, sortBy));
     FileIteratorState result(files, sortBy);
@@ -68,5 +72,9 @@ FileIteratorState AsyncFileIterator::sort(FileIteratorState iteratorState) {
 FileIteratorState AsyncFileIterator::locateFile(const QFileInfo &file, FileIteratorState iteratorState) {
     iteratorState.locate(file);
     return iteratorState;
+}
+
+bool AsyncFileIterator::isEmpty() {
+    return state.getFiles().isEmpty();
 }
 

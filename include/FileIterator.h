@@ -14,12 +14,14 @@ public:
     virtual void setSortFlags(QDir::SortFlags sortBy) = 0;
     virtual void reloadDir() = 0;
     virtual int directorySize() = 0;
+    virtual int currentPosition() = 0;
     virtual QFileInfo next() = 0;
     virtual QFileInfo previous() = 0;
     virtual QFileInfo current() const = 0;
     virtual void remove() = 0;
     virtual QFileInfo first() = 0;
     virtual QFileInfo last() = 0;
+    virtual bool isEmpty() = 0;
 };
 
 #endif //IM_VIEW_FILEITERATOR_H

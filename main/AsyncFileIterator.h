@@ -14,44 +14,48 @@
 class AsyncFileIterator : public FileIterator {
 public:
     AsyncFileIterator() {}
+
     explicit AsyncFileIterator(const QStringList &filters) : iteratorFilters(filters) {}
+
     explicit AsyncFileIterator(const QStringList &&filters) : iteratorFilters(std::move(filters)) {}
 
-    virtual void setFile(const QFileInfo &file) override final;
+    void setFile(const QFileInfo &file) final;
 
-    virtual void setSortFlags(QDir::SortFlags sortBy) override final;
+    void setSortFlags(QDir::SortFlags sortBy) final;
 
-    virtual void reloadDir() override final;
+    void reloadDir() final;
 
-    virtual int directorySize() override final;
+    int directorySize() final;
 
-    virtual QFileInfo next() override final {
+    int currentPosition() final;
+
+    QFileInfo next() final {
         waitStateFuture();
         return state.next();
     }
 
-    virtual QFileInfo previous() override final {
+    QFileInfo previous() final {
         waitStateFuture();
         return state.previous();
     }
 
-    virtual QFileInfo first() override final {
+    QFileInfo first() final {
         waitStateFuture();
         state.goFront();
         return state.current();
     }
 
-    virtual QFileInfo last() override final {
+    QFileInfo last() final {
         waitStateFuture();
         state.goBack();
         return state.current();
     }
 
-    virtual QFileInfo current() const final {
+    QFileInfo current() const final {
         return state.current();
     }
 
-    virtual void remove() final {
+    void remove() final {
         waitStateFuture();
         state.remove();
     }
@@ -59,6 +63,8 @@ public:
     QDir::SortFlags sortFlags() {
         return state.getSortBy();
     }
+
+    bool isEmpty() final;
 
 private:
     static FileIteratorState locateFile(const QFileInfo &file, FileIteratorState iteratorState);

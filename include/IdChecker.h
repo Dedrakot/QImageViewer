@@ -9,7 +9,7 @@ template <typename T>
 class IdChecker {
 public:
     virtual T nextId() = 0;
-    virtual bool isCanceled(T id) const;
+    virtual bool isCanceled(T id) const = 0;
 };
 
 #endif //IM_VIEW_IDCHECKER_H

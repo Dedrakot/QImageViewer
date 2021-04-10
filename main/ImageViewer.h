@@ -110,24 +110,25 @@ private:
 protected:
     void keyPressEvent(QKeyEvent *event) override;
 
+    void keyReleaseEvent(QKeyEvent *event) override;
+
     void resizeEvent(QResizeEvent *event) override;
 
 #ifdef Q_OS_MAC
     bool event(QEvent *event) override;
 #endif
 private:
+    void initPrevious();
 
-    void loadNext();
+    void initNext();
 
-    void loadPrevious();
+    void load();
 
     void createActions();
 
     bool saveFile(const QString &fileName);
 
     void setImage(QImage &image, unsigned int i);
-
-    void scaleImage(double factor);
 
     void sortByName();
 
@@ -139,7 +140,7 @@ private:
 
     void fullScreenMode();
 
-    bool canZoom(double factor);
+    void showNextFileStatus(const QFileInfo &f, const QString &addition);
 
     ImageViewport &imageViewPort;
     IdChecker<unsigned> &idChecker;

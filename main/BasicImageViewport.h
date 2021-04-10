@@ -19,10 +19,10 @@ private:
 public:
     explicit BasicImageViewport(const IdChecker<unsigned> &idChecker, QWidget *parent = nullptr);
 
-    ~BasicImageViewport() override {
-        delete imageLabel;
-        delete scrollArea;
-    }
+//    ~BasicImageViewport() override {
+//        delete imageLabel;
+//        delete scrollArea;
+//    }
 
     [[nodiscard]] QWidget* widget() const final {
         return scrollArea;
@@ -42,7 +42,7 @@ public:
 
     void copyToClipboard() override;
 
-    QImage getImage() const override;
+    [[nodiscard]] QImage getImage() const override;
 
 signals:
     void newLabelPixmap(unsigned id, const QPixmap &pixmap, bool fitToWindow);

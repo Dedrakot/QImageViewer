@@ -1,7 +1,6 @@
 //
 // Created by ivan on 06.04.2021.
 //
-
 #include <qglobal.h>
 
 #include "ImageViewer.h"
@@ -70,9 +69,6 @@ void ImageViewer::loadFileAsync(const QString &filePath, unsigned loadId) {
                 .arg(QDir::toNativeSeparators(filePath), reader.errorString());
         emit newStatus(message);
     } else {
-        emit newStatus(tr("\"%1\", %2x%3, Depth: %4")
-                               .arg(QDir::toNativeSeparators(filePath)).arg(image.width())
-                               .arg(image.height()).arg(image.depth()));
         setImage(image, loadId);
     }
 }
@@ -368,11 +364,24 @@ void ImageViewer::reverseSort() {
 void ImageViewer::keyPressEvent(QKeyEvent *event) {
     switch (event->key()) {
         case Qt::Key_Backspace:
-            loadPrevious();
+            initPrevious();
             break;
         case Qt::Key_Space:
-            loadNext();
+            initNext();
             break;
+        default:
+            QMainWindow::keyPressEvent(event);
+    }
+}
+
+void ImageViewer::keyReleaseEvent(QKeyEvent *event) {
+    switch (event->key()) {
+        case Qt::Key_Backspace:
+        case Qt::Key_Space:
+            load();
+            break;
+        default:
+            QWidget::keyReleaseEvent(event);
     }
 }
 
@@ -393,33 +402,40 @@ QFileInfo iterate(FileIterator &iterator, QFileInfo (FileIterator::*next)()) {
     return f;
 }
 
-void ImageViewer::loadNext() {
+void ImageViewer::initNext() {
     QFileInfo f(iterate(iterator, &FileIterator::next));
     bool notifyLoop = false;
     if (f.fileName().isEmpty()) {
         f = iterator.first();
         notifyLoop = true;
     }
-    if (f.isReadable() && windowFilePath() != f.filePath()) {
-        loadFile(f);
-        if (notifyLoop) {
-            statusBar()->showMessage(statusBar()->currentMessage() + " | Returned to the first one");
-        }
+    if (!f.isReadable() && !iterator.isEmpty()) {
+        f = iterator.previous();
+        iterator.reloadDir();
     }
+    showNextFileStatus(f, notifyLoop ? tr("Returned to the first one") : QString());
 }
 
-void ImageViewer::loadPrevious() {
+void ImageViewer::initPrevious() {
     QFileInfo f(iterate(iterator, &FileIterator::previous));
     bool notifyLoop = false;
     if (f.fileName().isEmpty()) {
         f = iterator.last();
         notifyLoop = true;
     }
+
+    while (!f.isReadable() && !iterator.isEmpty()) {
+        f = iterator.next();
+        iterator.reloadDir();
+    }
+
+    showNextFileStatus(f, notifyLoop ? tr("Returned to the last one") : QString());
+}
+
+void ImageViewer::load() {
+    QFileInfo f = iterator.current();
     if (f.isReadable() && windowFilePath() != f.filePath()) {
         loadFile(f);
-        if (notifyLoop) {
-            statusBar()->showMessage(statusBar()->currentMessage() + " | Returned to the last one");
-        }
     }
 }
 
@@ -558,6 +574,19 @@ bool ImageViewer::event(QEvent *event) {
 
 void ImageViewer::showStatus(const QString &message) {
     statusBar()->showMessage(message);
+}
+
+void ImageViewer::showNextFileStatus(const QFileInfo &f, const QString &addition) {
+    if (f.isReadable() && windowFilePath() != f.filePath()) {
+        QString message = tr("(%1/%2) \"%3\"")
+                .arg(iterator.currentPosition())
+                .arg(iterator.directorySize())
+                .arg(f.fileName());
+        if (!addition.isEmpty()) {
+            message += " | " + addition;
+        }
+        statusBar()->showMessage(message);
+    }
 }
 
 #ifdef Q_OS_MAC
