@@ -11,6 +11,7 @@
 #include <QSettings>
 #include "AsyncFileIterator.h"
 #include "ImageViewport.h"
+#include "IdChecker.h"
 
 #if defined(QT_PRINTSUPPORT_LIB)
 #  include <QtPrintSupport/qtprintsupportglobal.h>
@@ -37,17 +38,24 @@ class ImageViewer : public QMainWindow {
 Q_OBJECT
 
 public:
-    explicit ImageViewer(ImageViewport *viewport, QWidget *parent = nullptr);
+    explicit ImageViewer(ImageViewport &viewport, IdChecker<unsigned> &idChecker, QWidget *parent = nullptr);
 
-    ~ImageViewer() override;
+    void loadFile(const QFileInfo &);
 
-    bool loadFile(const QFileInfo &);
+    void loadFileAsync(const QString &filePath, unsigned int loadId);
 
 public slots:
 
     void loadImage(const QString &filePath);
+#ifdef Q_OS_MAC
+    void repaintForMac();
+#endif
+
+signals:
+    void newStatus(const QString &message);
 
 private slots:
+    void showStatus(const QString &message);
 
     void open();
 
@@ -90,7 +98,6 @@ private slots:
     void dropScale();
 
     void dropPath();
-
 private:
     void restoreScale();
 
@@ -116,11 +123,9 @@ private:
 
     void createActions();
 
-    void updateActions();
-
     bool saveFile(const QString &fileName);
 
-    bool setImage(const QImage &newImage);
+    void setImage(QImage &image, unsigned int i);
 
     void scaleImage(double factor);
 
@@ -136,16 +141,15 @@ private:
 
     bool canZoom(double factor);
 
-    QImage image;
+    ImageViewport &imageViewPort;
+    IdChecker<unsigned> &idChecker;
     QSettings settings;
     AsyncFileIterator iterator;
-    double scaleFactor = 1;
-
+    QFuture<void> loadFuture;
 #if defined(QT_PRINTSUPPORT_LIB) && QT_CONFIG(printer)
     QPrinter printer;
     QAction *printAct;
 #endif
-    ImageViewport *imageViewPort;
     QAction *sortReversedAct;
     QAction *sortByNameAct;
     QAction *sortByTimeAct;

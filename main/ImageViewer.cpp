@@ -2,6 +2,8 @@
 // Created by ivan on 06.04.2021.
 //
 
+#include <qglobal.h>
+
 #include "ImageViewer.h"
 
 #include <QApplication>
@@ -22,8 +24,10 @@
 #include <QKeyEvent>
 #include <QtCore/QSettings>
 #include <QActionGroup>
+#include <QtConcurrent/QtConcurrent>
 
 #include "utils.h"
+#include "AtomicIdChecker.h"
 
 #if defined(QT_PRINTSUPPORT_LIB)
 #  include <QtPrintSupport/qtprintsupportglobal.h>
@@ -38,74 +42,69 @@ const QString SETTINGS_GEOMETRY = "view/geometry";
 const QString SETTINGS_SCALE = "view/scale";
 const QString SETTINGS_PATH = "view/path";
 
-ImageViewer::ImageViewer(ImageViewport *viewport, QWidget *parent) : QMainWindow(parent),
-                                                                     imageViewPort(viewport),
-                                                                     settings("Dedrakot", "ImageViewer"),
-                                                                     iterator(supportedImageFilters()) {
-    setCentralWidget(imageViewPort->widget());
+ImageViewer::ImageViewer(ImageViewport &viewport, IdChecker<unsigned> &idChecker, QWidget *parent) :
+        QMainWindow(parent),
+        imageViewPort(viewport),
+        idChecker(idChecker),
+        settings("Dedrakot", "ImageViewer"),
+        iterator(supportedImageFilters()) {
+
+    statusBar()->showMessage(tr("No data loaded"));
+//    statusBar()->setVisible(true);
+    connect(this, &ImageViewer::newStatus, this, &ImageViewer::showStatus);
+    setCentralWidget(imageViewPort.widget());
 
     createActions();
 
     restoreSettings();
 }
 
-ImageViewer::~ImageViewer() {
-    delete imageViewPort;
-}
-
-bool ImageViewer::loadFile(const QFileInfo &file) {
-    iterator.setFile(file);
-    QString filePath = file.filePath();
-
+void ImageViewer::loadFileAsync(const QString &filePath, unsigned loadId) {
+    if (idChecker.isCanceled(loadId))
+        return;
     QImageReader reader(filePath);
     reader.setAutoTransform(true);
-    const QImage newImage = reader.read();
-
-    if (newImage.isNull()) {
+    QImage image = reader.read();
+    if (image.isNull()) {
         const QString message = tr("Cannot load %1: %2")
                 .arg(QDir::toNativeSeparators(filePath), reader.errorString());
-        statusBar()->showMessage(message);
-    } else if (setImage(newImage)) {
-        setWindowFilePath(filePath);
-
-        const QString message = tr("Opened \"%1\", %2x%3, Depth: %4, Modification time: %5")
-                .arg(QDir::toNativeSeparators(filePath)).arg(image.width()).arg(image.height()).arg(
-                image.depth()).arg(
-                file.lastModified().toString());
-        statusBar()->showMessage(message);
-        return true;
+        emit newStatus(message);
+    } else {
+        emit newStatus(tr("\"%1\", %2x%3, Depth: %4")
+                               .arg(QDir::toNativeSeparators(filePath)).arg(image.width())
+                               .arg(image.height()).arg(image.depth()));
+        setImage(image, loadId);
     }
-    return false;
 }
 
-bool ImageViewer::setImage(const QImage &newImage) {
-    if (newImage.isNull()) {
+void ImageViewer::loadFile(const QFileInfo &file) {
+    iterator.setFile(file);
+    QString filePath = file.filePath();
+    unsigned nextLoadId = idChecker.nextId();
+    loadFuture.cancel();
+    loadFuture = QtConcurrent::run(&ImageViewer::loadFileAsync, this, filePath, nextLoadId);
+    setWindowFilePath(filePath);
+}
+
+void ImageViewer::setImage(QImage &image, unsigned int loadId) {
+    if (idChecker.isCanceled(loadId))
+        return;
+    if (image.isNull()) {
         const QString message = tr("Invalid image");
-        statusBar()->showMessage(message);
-        return false;
+        emit newStatus(message);
+        return;
     }
 
-    image = newImage;
-    if (newImage.colorSpace().isValid())
+    if (image.colorSpace().isValid())
         image.convertToColorSpace(QColorSpace::SRgb);
 
-    imageViewPort->setImage(image);
-
-    fitToWindow();
-
-#ifdef Q_OS_MAC
-    const Qt::WindowStates &wState = windowState();
-    if (wState.testFlag(Qt::WindowMaximized) || wState.testFlag(Qt::WindowFullScreen)) {
-        repaint();
-    }
-#endif
-    return true;
+    imageViewPort.setImage(loadId, image, fitToWindowAct->isChecked());
 }
 
 bool ImageViewer::saveFile(const QString &fileName) {
     QImageWriter writer(fileName);
 
-    if (!writer.write(image)) {
+    if (!writer.write(imageViewPort.getImage())) {
         QMessageBox::information(this, QGuiApplication::applicationDisplayName(),
                                  tr("Cannot write %1: %2")
                                          .arg(QDir::toNativeSeparators(fileName)), writer.errorString());
@@ -149,10 +148,13 @@ void ImageViewer::open() {
     QFileDialog dialog(this, tr("Open File"));
     initializeImageFileDialog(dialog, QFileDialog::AcceptOpen, settings);
 
-    while (dialog.exec() == QDialog::Accepted && !loadFile(QFileInfo(dialog.selectedFiles().first()))) {}
+    if (dialog.exec() == QDialog::Accepted)
+        loadFile(QFileInfo(dialog.selectedFiles().first()));
 }
 
 void ImageViewer::saveAs() {
+    if (!imageViewPort.hasImage())
+        return;
     QFileDialog dialog(this, tr("Save File As"));
     initializeImageFileDialog(dialog, QFileDialog::AcceptSave, settings);
 
@@ -171,8 +173,9 @@ void ImageViewer::deleteFile() {
 }
 
 void ImageViewer::print() {
-    Q_ASSERT(!image.isNull());
 #if defined(QT_PRINTSUPPORT_LIB) && QT_CONFIG(printdialog)
+    if (!imageViewPort->hasImage());
+        return;
     QPrintDialog dialog(&printer, this);
     if (dialog.exec()) {
         QPainter painter(&printer);
@@ -187,9 +190,7 @@ void ImageViewer::print() {
 }
 
 void ImageViewer::copy() {
-#ifndef QT_NO_CLIPBOARD
-    QGuiApplication::clipboard()->setImage(image);
-#endif // !QT_NO_CLIPBOARD
+    imageViewPort.copyToClipboard();
 }
 
 #ifndef QT_NO_CLIPBOARD
@@ -210,11 +211,11 @@ static QImage clipboardImage() {
 
 void ImageViewer::paste() {
 #ifndef QT_NO_CLIPBOARD
-    const QImage newImage = clipboardImage();
+    QImage newImage = clipboardImage();
     if (newImage.isNull()) {
         statusBar()->showMessage(tr("No image in clipboard"));
     } else {
-        setImage(newImage);
+        setImage(newImage, idChecker.nextId());
         setWindowFilePath(QString());
         const QString message = tr("Obtained image from clipboard, %1x%2, Depth: %3")
                 .arg(newImage.width()).arg(newImage.height()).arg(newImage.depth());
@@ -224,32 +225,20 @@ void ImageViewer::paste() {
 }
 
 void ImageViewer::zoomIn() {
-    if (canZoom(1.2)) {
-        scaleImage(1.2);
-    }
+    imageViewPort.zoomIn();
 }
 
 void ImageViewer::zoomOut() {
-    if (canZoom(0.8)) {
-        scaleImage(0.8);
-    }
+    imageViewPort.zoomOut();
 }
 
 void ImageViewer::normalSize() {
-    scaleFactor = 1.0;
-    imageViewPort->scaleImage(1.0);
+    imageViewPort.normalSize();
 }
 
 void ImageViewer::fitToWindow() {
-    if (!image.isNull()) {
-        if (fitToWindowAct->isChecked()) {
-            scaleFactor = imageViewPort->calcFitToViewport(statusBar()->isVisible() ? 0 : statusBar()->height());
-        }
-        imageViewPort->scaleImage(scaleFactor);
-    }
-    updateActions();
+    imageViewPort.fitToWindow(fitToWindowAct->isChecked());
 }
-
 
 void ImageViewer::about() {
     QMessageBox::about(this, tr("About Image Viewer"),
@@ -274,12 +263,11 @@ void ImageViewer::createActions() {
     openAct->setShortcut(QKeySequence::Open);
 
     saveAsAct = fileMenu->addAction(tr("&Save As..."), this, &ImageViewer::saveAs);
-    saveAsAct->setEnabled(false);
+    saveAsAct->setShortcut(QKeySequence::SaveAs);
 
 #if defined(QT_PRINTSUPPORT_LIB) && QT_CONFIG(printer)
     printAct = fileMenu->addAction(tr("&Print..."), this, &ImageViewer::print);
     printAct->setShortcut(QKeySequence::Print);
-    printAct->setEnabled(false);
 #endif
 
     auto deleteAct = fileMenu->addAction(tr("&Delete"), this, &ImageViewer::deleteFile);
@@ -294,7 +282,6 @@ void ImageViewer::createActions() {
 
     copyAct = editMenu->addAction(tr("&Copy"), this, &ImageViewer::copy);
     copyAct->setShortcut(QKeySequence::Copy);
-    copyAct->setEnabled(false);
 
     QAction *pasteAct = editMenu->addAction(tr("&Paste"), this, &ImageViewer::paste);
     pasteAct->setShortcut(QKeySequence::Paste);
@@ -325,7 +312,7 @@ void ImageViewer::createActions() {
     fullScreenAct->setShortcut(QKeySequence::FullScreen);
 
     zoomInAct = viewMenu->addAction(tr("Zoom &In (25%)"), this, &ImageViewer::zoomIn);
-    zoomInAct->setShortcuts({tr("Ctrl+="), tr("Ctrl++")});//QKeySequence::ZoomIn);
+    zoomInAct->setShortcuts({tr("Ctrl+="), tr("Ctrl++")});//, QKeySequence::ZoomIn});
 
     zoomOutAct = viewMenu->addAction(tr("Zoom &Out (25%)"), this, &ImageViewer::zoomOut);
     zoomOutAct->setShortcut(QKeySequence::ZoomOut);
@@ -376,29 +363,6 @@ void ImageViewer::sortByTime() {
 
 void ImageViewer::reverseSort() {
     iterator.setSortFlags(sortFlags());
-}
-
-
-void ImageViewer::updateActions() {
-    saveAsAct->setEnabled(!image.isNull());
-    copyAct->setEnabled(!image.isNull());
-#if defined(QT_PRINTSUPPORT_LIB) && QT_CONFIG(printer)
-    printAct->setEnabled(!image.isNull());
-#endif
-}
-
-const int MAX_IMAGE_SIZE = 20000 * 20000;
-
-bool ImageViewer::canZoom(double factor) {
-    const QSize &imSize = (scaleFactor * factor) * image.size();
-    return imSize.width() > 0 && imSize.height() > 0 && imSize.width() * imSize.height() < MAX_IMAGE_SIZE;
-}
-
-void ImageViewer::scaleImage(double factor) {
-    if (!image.isNull()) {
-        scaleFactor *= factor;
-        imageViewPort->scaleImage(scaleFactor);
-    }
 }
 
 void ImageViewer::keyPressEvent(QKeyEvent *event) {
@@ -484,7 +448,7 @@ void ImageViewer::restoreSettings() {
 
 void ImageViewer::restoreScale() {
     settings.beginGroup(SETTINGS_SCALE);
-    scaleFactor = settings.value("scale", 1.0).value<double>();
+    imageViewPort.setScaleFactor(settings.value("scale", 1.0).value<double>());
     fitToWindowAct->setChecked(settings.value("fit", true).value<bool>());
     settings.endGroup();
 }
@@ -542,7 +506,7 @@ void ImageViewer::saveSort() {
 
 void ImageViewer::saveScale() {
     settings.beginGroup(SETTINGS_SCALE);
-    settings.setValue("scale", scaleFactor);
+    settings.setValue("scale", imageViewPort.getScaleFactor());
     settings.setValue("fit", fitToWindowAct->isChecked());
     settings.endGroup();
 }
@@ -580,7 +544,7 @@ bool ImageViewer::event(QEvent *event) {
                 if (!canZoom(factor)) {
                     return true;
                 }
-                scaleImage(factor);
+                imageViewPort.scale(factor);
                 const QString message = tr("Zoom diff %1. Scale: %2")
                         .arg(factor).arg(scaleFactor);
                 statusBar()->showMessage(message);
@@ -589,5 +553,18 @@ bool ImageViewer::event(QEvent *event) {
         }
     }
     return QMainWindow::event(event);
+}
+#endif
+
+void ImageViewer::showStatus(const QString &message) {
+    statusBar()->showMessage(message);
+}
+
+#ifdef Q_OS_MAC
+void ImageViewer::repaintForMac() {
+    const Qt::WindowStates &wState = windowState();
+    if (wState.testFlag(Qt::WindowMaximized) || wState.testFlag(Qt::WindowFullScreen)) {
+        repaint();
+    }
 }
 #endif
